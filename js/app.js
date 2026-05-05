@@ -1,6 +1,7 @@
 const STORAGE_KEY = "fepesca_ata_state";
 const STORAGE_VERSION = 2;
 const DEFAULT_THEME = "light";
+const PENDING_TOAST_KEY = "fepesca_pending_toast";
 const DEFAULT_TIPO_REUNIAO = "reunião ordinária";
 const DEFAULT_COLEGIADO = "Conselho Deliberativo da Faculdade de Engenharia de Pesca";
 const DEFAULT_LOGOS = {
@@ -77,8 +78,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderAllItems();
     renderLogoPreview();
     updateThemeButton();
+    updateThemeMeta();
     updateChips();
     sincronizarAtaSePossivel(true);
+    showPendingToast();
 });
 
 function setupTabs() {
@@ -232,6 +235,7 @@ function toggleTheme() {
     const current = document.body.getAttribute("data-theme") === "dark" ? "light" : "dark";
     document.body.setAttribute("data-theme", current);
     updateThemeButton();
+    updateThemeMeta();
     salvarEstado();
 }
 
@@ -241,6 +245,12 @@ function updateThemeButton() {
     btn.textContent = document.body.getAttribute("data-theme") === "dark"
         ? "☀️ Tema Claro"
         : "🌙 Tema Escuro";
+}
+
+function updateThemeMeta() {
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (!metaTheme) return;
+    metaTheme.setAttribute("content", document.body.getAttribute("data-theme") === "dark" ? "#08111f" : "#f8fafc");
 }
 
 function exportarSessaoJSON() {
@@ -260,6 +270,7 @@ function exportarSessaoJSON() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+    showToast("Backup da sessão preparado em JSON.", "success");
 }
 
 function importarSessaoJSON(event) {
@@ -274,7 +285,7 @@ function importarSessaoJSON(event) {
                 throw new Error("Arquivo inválido");
             }
             localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-            alert("Sessão importada com sucesso. A página será recarregada.");
+            sessionStorage.setItem(PENDING_TOAST_KEY, "Sessão importada com sucesso.");
             location.reload();
         } catch (error) {
             alert("Não foi possível importar o arquivo selecionado.");
@@ -1051,7 +1062,7 @@ function criarTextRunsDOCX(DOCX, text) {
 async function copiarTexto(texto, mensagemSucesso) {
     try {
         await navigator.clipboard.writeText(texto);
-        alert(mensagemSucesso);
+        showToast(mensagemSucesso, "success");
     } catch (error) {
         const textarea = document.createElement("textarea");
         textarea.value = texto;
@@ -1060,8 +1071,34 @@ async function copiarTexto(texto, mensagemSucesso) {
         textarea.select();
         document.execCommand("copy");
         textarea.remove();
-        alert(mensagemSucesso);
+        showToast(mensagemSucesso, "success");
     }
+}
+
+function showPendingToast() {
+    const message = sessionStorage.getItem(PENDING_TOAST_KEY);
+    if (!message) return;
+    sessionStorage.removeItem(PENDING_TOAST_KEY);
+    showToast(message, "success");
+}
+
+function showToast(message, type = "info") {
+    const region = byId("toastRegion");
+    if (!region || !esc(message)) return;
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    region.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        toast.classList.add("show");
+    });
+
+    window.setTimeout(() => {
+        toast.classList.remove("show");
+        window.setTimeout(() => toast.remove(), 220);
+    }, 2600);
 }
 
 async function exportarPPTX() {

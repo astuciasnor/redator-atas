@@ -4,7 +4,12 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="description"
+        content="Aplicação web da FEPESCA para organizar reuniões, registrar presenças, estruturar pautas e gerar atas institucionais em DOCX." />
+    <meta name="theme-color" content="#f8fafc" />
+    <meta name="color-scheme" content="light dark" />
     <title>FEPESCA — Redator de Atas</title>
+    <link rel="icon" type="image/png" href="img/logo_fepesca_final.png">
     <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -12,7 +17,9 @@
     <div class="wrap" id="app">
         <header class="top">
             <div class="brand">
-                <div class="logo">F</div>
+                <div class="logo brand-logo" aria-hidden="true">
+                    <img src="img/logo_fepesca_final.png" alt="">
+                </div>
                 <div>
                     <h1>FEPESCA — Redator de Atas</h1>
                     <p>Estruture a reunião, gere a ata em DOCX e compartilhe a sessão por JSON.</p>
@@ -40,7 +47,7 @@
             <aside class="sidebar">
                 <div class="sidebar-card sidebar-card-brand">
                     <h2>Fluxo de trabalho</h2>
-                    <p>Preencha os dados da reunião, registre a discussão, revise a prévia institucional e exporte em DOCX.</p>
+                    <p>Funciona direto no navegador: preencha os dados da reunião, revise a prévia institucional e exporte em DOCX.</p>
                 </div>
 
                 <nav class="sidebar-nav" aria-label="Seções do aplicativo">
@@ -55,8 +62,8 @@
                 </nav>
 
                 <div class="sidebar-card">
-                    <h3>Troca entre professores</h3>
-                    <p>Use Salvar Sessão para enviar o JSON pelo WhatsApp e Abrir Sessão para retomar o trabalho em outro computador.</p>
+                    <h3>Uso em vários computadores</h3>
+                    <p>Os dados ficam salvos neste navegador. Use Salvar Sessão para gerar um JSON antes de trocar de computador, navegador ou aba privada.</p>
                 </div>
             </aside>
 
@@ -406,6 +413,17 @@
                 </div>
             </main>
         </div>
+
+        <footer class="public-footer">
+            <div class="public-footer-copy">
+                <strong>Versão pública do Redator de Atas FEPESCA.</strong>
+                <span>Os dados permanecem neste navegador até serem exportados em JSON.</span>
+            </div>
+            <div class="public-footer-links">
+                <a href="https://github.com/astuciasnor/redator-atas" target="_blank" rel="noreferrer">Repositório no GitHub</a>
+                <a href="https://astuciasnor.github.io/redator-atas/" target="_blank" rel="noreferrer">Abrir link público</a>
+            </div>
+        </footer>
     </div>
 
     <!-- Container Fullscreen (Oculto) -->
@@ -427,6 +445,8 @@
                 style="background:#3b82f6; border:none; color:#fff; font-size: 24px; width: 50px; height:50px; border-radius: 50%; cursor:pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">&rarr;</button>
         </div>
     </div>
+
+    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
 
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/pptxgen.min.js"></script>
