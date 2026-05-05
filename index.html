@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FEPESCA — Redator de Atas</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body data-theme="light">
+    <div class="wrap" id="app">
+        <header class="top">
+            <div class="brand">
+                <div class="logo">F</div>
+                <div>
+                    <h1>FEPESCA — Redator de Atas</h1>
+                    <p>Estruture a reunião, gere a ata em DOCX e compartilhe a sessão por JSON.</p>
+                </div>
+            </div>
+            <div class="chips">
+                <span class="chip chip-action" id="btnExportarSessao" title="Baixar backup da reunião atual">
+                    💾 Salvar Sessão
+                </span>
+                <label class="chip chip-secondary" for="btnImportarSessao" title="Abrir arquivo de reunião">
+                    📂 Abrir Sessão
+                </label>
+                <input type="file" id="btnImportarSessao" accept=".json" style="display:none;">
+                <span class="chip chip-brand" id="btnToggleTema" title="Alternar tema da aplicação">
+                    🌙 Tema Escuro
+                </span>
+                <span class="chip chip-danger" id="btnNovaReuniao" title="Apagar todas as anotações">
+                    🗑️ Nova Reunião
+                </span>
+                <span class="chip" id="chipData">📅 Data: —</span>
+            </div>
+        </header>
+
+        <div class="workspace-shell">
+            <aside class="sidebar">
+                <div class="sidebar-card sidebar-card-brand">
+                    <h2>Fluxo de trabalho</h2>
+                    <p>Preencha os dados da reunião, registre a discussão, revise a prévia institucional e exporte em DOCX.</p>
+                </div>
+
+                <nav class="sidebar-nav" aria-label="Seções do aplicativo">
+                    <button class="tabbtn active" data-tab="identificacao">📌 Identificação</button>
+                    <button class="tabbtn" data-tab="presencas">✅ Presenças</button>
+                    <button class="tabbtn" data-tab="pautas">🗂️ Pautas</button>
+                    <button class="tabbtn" data-tab="informes">📣 Informes</button>
+                    <button class="tabbtn" data-tab="transcricao">🎙️ Transcrição</button>
+                    <button class="tabbtn" data-tab="ata">📝 Ata</button>
+                    <button class="tabbtn" data-tab="email">📧 Convite</button>
+                    <button class="tabbtn tabbtn-highlight" data-tab="datashow">▶️ Apresentação</button>
+                </nav>
+
+                <div class="sidebar-card">
+                    <h3>Troca entre professores</h3>
+                    <p>Use Salvar Sessão para enviar o JSON pelo WhatsApp e Abrir Sessão para retomar o trabalho em outro computador.</p>
+                </div>
+            </aside>
+
+            <main class="content-area">
+                <div class="panel">
+                    <section id="identificacao" class="tabcontent active">
+                        <div class="section-intro">
+                            <h2>Identificação da reunião</h2>
+                            <p>Organize os dados-base antes de registrar presenças, pautas e deliberações.</p>
+                        </div>
+
+                        <div class="stack">
+                            <div class="card">
+                                <h3>Dados principais</h3>
+                                <div class="form-grid form-grid--3">
+                                    <div class="field">
+                                        <label for="tipoReuniao">Tipo de Reunião</label>
+                                        <input id="tipoReuniao" class="guardar" type="text" value="reunião ordinária" />
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="numeroAta">Número da Ata</label>
+                                        <input id="numeroAta" class="guardar" type="text" value="01/2026" />
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="tituloReuniao">Colegiado / Instância</label>
+                                        <input id="tituloReuniao" class="guardar" type="text"
+                                            value="Conselho Deliberativo da Faculdade de Engenharia de Pesca" />
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="dataReuniao">Data</label>
+                                        <input id="dataReuniao" class="guardar" type="date" />
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="horaInicio">Hora de início</label>
+                                        <input id="horaInicio" class="guardar" type="time" value="09:00" />
+                                    </div>
+
+                                    <div class="field">
+                                        <label for="horaFim">Hora de encerramento</label>
+                                        <input id="horaFim" class="guardar" type="time" value="11:00" />
+                                    </div>
+
+                                    <div class="field field-span-3">
+                                        <label for="localReuniao">Local</label>
+                                        <input id="localReuniao" class="guardar" type="text" value="Sala 03 - Bloco I" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid2">
+                                <div class="card">
+                                    <h3>Condução e redação</h3>
+                                    <div class="form-grid">
+                                        <div class="field">
+                                            <label for="presidente">Presidente</label>
+                                            <input id="presidente" class="guardar" type="text"
+                                                value="Prof. Dr. Carlos Alberto Martins Cordeiro" />
+                                        </div>
+                                        <div class="field">
+                                            <label for="redigidaPor">Redigida por</label>
+                                            <input id="redigidaPor" class="guardar" type="text"
+                                                value="Prof. Dr. Evaldo Martins da Silva" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card">
+                                    <h3>Referência institucional</h3>
+                                    <div class="tolerance">
+                                        <span class="badge">⏱️ Aviso</span>
+                                        <div>
+                                            <strong>Início da reunião:</strong> considerar tolerância de <strong>10 minutos</strong> após o horário previsto.
+                                        </div>
+                                    </div>
+                                    <p class="helper">A identificação principal da sessão será formada pelo número da ata e pela data da reunião.</p>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <h3>Logos institucionais</h3>
+                                <p>Carregue as logos da FEPESCA, da UFPA e do IECOS para usar na prévia e no arquivo DOCX.</p>
+
+                                <div class="logo-uploader-grid">
+                                    <label class="logo-upload-card" for="logoFepescaUpload">
+                                        <span class="logo-upload-title">Logo FEPESCA</span>
+                                        <span class="logo-upload-preview" id="logoFepescaBox">
+                                            <img id="logoFepescaPreview" alt="Logo FEPESCA" />
+                                            <span class="empty-logo" id="logoFepescaPlaceholder">FEPESCA</span>
+                                        </span>
+                                        <input id="logoFepescaUpload" type="file" accept="image/*" />
+                                    </label>
+
+                                    <label class="logo-upload-card" for="logoUfpaUpload">
+                                        <span class="logo-upload-title">Logo UFPA</span>
+                                        <span class="logo-upload-preview" id="logoUfpaBox">
+                                            <img id="logoUfpaPreview" alt="Logo UFPA" />
+                                            <span class="empty-logo" id="logoUfpaPlaceholder">UFPA</span>
+                                        </span>
+                                        <input id="logoUfpaUpload" type="file" accept="image/*" />
+                                    </label>
+
+                                    <label class="logo-upload-card" for="logoIecosUpload">
+                                        <span class="logo-upload-title">Logo IECOS</span>
+                                        <span class="logo-upload-preview" id="logoIecosBox">
+                                            <img id="logoIecosPreview" alt="Logo IECOS" />
+                                            <span class="empty-logo" id="logoIecosPlaceholder">IECOS</span>
+                                        </span>
+                                        <input id="logoIecosUpload" type="file" accept="image/*" />
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="presencas" class="tabcontent">
+                        <div class="card">
+                            <h2>Lista de presença</h2>
+                            <p>Marque <strong>Presente</strong> ou <strong>Ausente</strong>. Marque o motivo se ausente.</p>
+
+                            <div class="add">
+                                <div class="mini">
+                                    <label for="novoNome">Adicionar nome na reunião atual</label>
+                                    <input id="novoNome" type="text" placeholder="Ex.: Ana Paula Souza" />
+                                </div>
+                                <div class="mini">
+                                    <label for="novaFuncao">Função/Cargo</label>
+                                    <input id="novaFuncao" type="text" placeholder="Ex.: Profa. Dra. / Técnico" />
+                                </div>
+                                <button id="btnAdicionar" class="btn primary" type="button">➕ Adicionar Participante</button>
+                            </div>
+
+                            <div class="searchbar">
+                                <input id="busca" type="text" placeholder="Buscar participante por nome ou função..." />
+                                <button id="btnLimpar" class="btn" type="button">🧹 Limpar marcações</button>
+                                <button id="btnCSV" class="btn" type="button">⬇️ Baixar CSV</button>
+                            </div>
+
+                            <div class="tableWrap" style="margin-top:12px;">
+                                <table id="tabela">
+                                    <thead>
+                                        <tr>
+                                            <th>Participante</th>
+                                            <th style="width: 200px">Presença</th>
+                                            <th>Motivo da ausência</th>
+                                            <th style="width: 100px; text-align:center;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-membros"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="pautas" class="tabcontent">
+                        <div class="split">
+                            <div class="card">
+                                <div class="cardhead-inline">
+                                    <div>
+                                        <h2>Pautas</h2>
+                                        <p>Registre os pontos da ordem do dia e as deliberações correspondentes.</p>
+                                    </div>
+                                    <button id="btnAddPauta" class="btn primary">➕ Nova Pauta</button>
+                                </div>
+
+                                <div id="pautas-container"></div>
+                            </div>
+
+                            <div class="card helper-card">
+                                <h3>Dica de escrita</h3>
+                                <p>Para deliberações, use fórmulas curtas e objetivas.</p>
+                                <ul class="plain-list">
+                                    <li><strong>Encaminhamento:</strong> ficou definido que...</li>
+                                    <li><strong>Deliberação:</strong> aprovou-se...</li>
+                                    <li><strong>Prazo/Responsável:</strong> até DD/MM, responsável: Fulano(a).</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="informes" class="tabcontent">
+                        <div class="split">
+                            <div class="card">
+                                <div class="cardhead-inline">
+                                    <div>
+                                        <h2>Informes</h2>
+                                        <p>Registre avisos, comunicações e observações gerais da sessão.</p>
+                                    </div>
+                                    <button id="btnAddInforme" class="btn primary">➕ Novo Informe</button>
+                                </div>
+
+                                <div id="informes-container"></div>
+                            </div>
+
+                            <div class="card helper-card">
+                                <h3>Observação</h3>
+                                <p>Se o informe for apenas comunicacional, deixe a descrição em branco. Na ata sairá como registro sucinto do informe.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="transcricao" class="tabcontent">
+                        <div class="split split-wide">
+                            <div class="card">
+                                <h2>Transcrição de áudio</h2>
+                                <p>Cole aqui a transcrição bruta da reunião. Ela serve como apoio de redação e não entra automaticamente no texto final da ata.</p>
+                                <textarea id="transcricaoAudio" class="output guardar" style="min-height: 440px;"
+                                    placeholder="Cole aqui a transcrição do áudio ou anotações literais da reunião..."></textarea>
+                            </div>
+                            <div class="card helper-card">
+                                <h3>Uso recomendado</h3>
+                                <ul class="plain-list">
+                                    <li>Registrar falas ou trechos importantes.</li>
+                                    <li>Conferir nomes, justificativas e deliberações.</li>
+                                    <li>Transformar o conteúdo bruto em texto formal na aba da ata.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="ata" class="tabcontent">
+                        <div class="card">
+                            <div class="cardhead-inline cardhead-inline--top">
+                                <div>
+                                    <h2>Ata institucional</h2>
+                                    <p>Gere o texto-base, revise o documento e exporte em DOCX para circulação no Google Drive.</p>
+                                </div>
+                                <div class="toolbar-inline">
+                                    <label for="formatoAta">Formato</label>
+                                    <select id="formatoAta" class="guardar">
+                                        <option value="institucional">Texto corrido institucional</option>
+                                        <option value="resumida">Texto corrido resumido</option>
+                                    </select>
+                                    <span id="statusAta" class="pill">Sincronizada</span>
+                                </div>
+                            </div>
+
+                            <div class="tools">
+                                <button id="btnGerarAta" class="btn primary" type="button">🧾 Gerar texto base</button>
+                                <button id="btnCopiarAta" class="btn" type="button">📋 Copiar texto</button>
+                                <button id="btnBaixarAtaDOCX" class="btn" type="button">📄 Baixar DOCX</button>
+                            </div>
+
+                            <div class="document-grid">
+                                <div class="doc-preview-shell">
+                                    <article id="documentoAta" class="doc-page">
+                                        <div class="doc-header">
+                                            <div class="doc-logo-row">
+                                                <div class="doc-logo-slot" id="docLogoFepescaSlot">
+                                                    <img id="docLogoFepesca" alt="Logo FEPESCA" />
+                                                    <span class="empty-logo">FEPESCA</span>
+                                                </div>
+                                                <div class="doc-logo-slot" id="docLogoUfpaSlot">
+                                                    <img id="docLogoUfpa" alt="Logo UFPA" />
+                                                    <span class="empty-logo">UFPA</span>
+                                                </div>
+                                                <div class="doc-logo-slot" id="docLogoIecosSlot">
+                                                    <img id="docLogoIecos" alt="Logo IECOS" />
+                                                    <span class="empty-logo">IECOS</span>
+                                                </div>
+                                            </div>
+                                            <div class="doc-orgao">
+                                                <p>UNIVERSIDADE FEDERAL DO PARÁ</p>
+                                                <p>INSTITUTO DE ESTUDOS COSTEIROS</p>
+                                                <p>FACULDADE DE ENGENHARIA DE PESCA</p>
+                                            </div>
+                                            <h1 id="tituloDocumentoAta"></h1>
+                                        </div>
+                                        <div id="documentoAtaTexto" class="doc-body"></div>
+                                    </article>
+                                </div>
+
+                                <div class="card doc-editor-card">
+                                    <h3>Texto editável</h3>
+                                    <p>Se você editar manualmente o texto, a prévia e o DOCX passarão a usar essa versão.</p>
+                                    <textarea id="saidaAta" class="output guardar"
+                                        placeholder="Clique em 'Gerar texto base' ou edite manualmente o texto final aqui..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="email" class="tabcontent">
+                        <div class="card">
+                            <h2>Gerador de e-mail de convocação</h2>
+                            <p>Crie um e-mail cordial e institucional pronto para convocar os membros. Os dados de data, hora, pautas e informes são puxados automaticamente.</p>
+
+                            <div class="form-grid form-grid--2 form-grid-surface">
+                                <div class="field">
+                                    <label for="emailSaudacao">Saudação</label>
+                                    <input id="emailSaudacao" class="guardar" type="text" value="Prezadas e prezados," />
+                                </div>
+                                <div class="field">
+                                    <label for="emailOrgao">Órgão / Colegiado</label>
+                                    <input id="emailOrgao" class="guardar" type="text"
+                                        value="Colegiado da Faculdade de Engenharia de Pesca" />
+                                </div>
+                                <div class="field field-span-2">
+                                    <label for="emailLink">Link da reunião (opcional)</label>
+                                    <input id="emailLink" class="guardar" type="text"
+                                        placeholder="Ex.: meet.google.com/abc-defg-hij" />
+                                </div>
+                                <div class="field">
+                                    <label for="emailAssinatura">Assinatura</label>
+                                    <input id="emailAssinatura" class="guardar" type="text"
+                                        value="Prof. Dr. Carlos Alberto Martins Cordeiro" />
+                                </div>
+                                <div class="field">
+                                    <label for="emailCargo">Cargo (assinatura)</label>
+                                    <input id="emailCargo" class="guardar" type="text"
+                                        value="Diretor da Faculdade de Engenharia de Pesca" />
+                                </div>
+                            </div>
+
+                            <div class="tools">
+                                <button id="btnGerarEmail" class="btn primary" type="button">✉️ Gerar E-mail</button>
+                                <button id="btnCopiarEmail" class="btn" type="button">📋 Copiar texto</button>
+                            </div>
+
+                            <div class="email-output">
+                                <label for="saidaAssuntoEmail">Assunto sugerido</label>
+                                <input id="saidaAssuntoEmail" type="text" readonly title="Clique para copiar o assunto" />
+                                <textarea id="saidaEmail" class="output guardar" style="min-height: 350px;"
+                                    placeholder="Clique em 'Gerar E-mail' e o texto aparecerá aqui..."></textarea>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="datashow" class="tabcontent">
+                        <div class="card card-presentation">
+                            <h2>Modo apresentação</h2>
+                            <p>Gere slides com base nas pautas e informes preenchidos para apresentar na reunião presencial.</p>
+
+                            <div class="tools tools-centered">
+                                <button id="btnBaixarPPTX" class="btn primary" type="button">⬇️ Baixar PowerPoint (.pptx)</button>
+                                <button id="btnModoTelaCheia" class="btn" type="button">🖥️ Rodar no navegador</button>
+                            </div>
+
+                            <div id="loadingPPTX" class="loading-inline" style="display:none;">
+                                ⏳ Gerando arquivo, aguarde...
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Container Fullscreen (Oculto) -->
+    <div id="fullscreenSlides"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#1e293b; color:#fff; z-index:9999; flex-direction:column; justify-content:center; align-items:center; padding: 40px; text-align: center; font-family: 'Segoe UI', system-ui, sans-serif;">
+        <button id="btnSairTelaCheia"
+            style="position:absolute; top:20px; right:20px; background:rgba(255,255,255,0.1); border:none; color:#fff; padding:8px 16px; border-radius:4px; font-size:14px; cursor:pointer;"
+            title="Sair da apresentação (Esc)">Sair [Esc]</button>
+        <div id="slideContent" style="width: 100%; max-width: 1000px;">
+            <!-- Slide Injection -->
+        </div>
+        <div style="position: absolute; bottom: 30px; display: flex; gap: 20px;">
+            <button id="btnSlidePrev"
+                style="background:#3b82f6; border:none; color:#fff; font-size: 24px; width: 50px; height:50px; border-radius: 50%; cursor:pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">&larr;</button>
+            <div id="slideCounter"
+                style="display: flex; align-items: center; font-size: 18px; font-weight: bold; color: rgba(255,255,255,0.6);">
+                1 / 5</div>
+            <button id="btnSlideNext"
+                style="background:#3b82f6; border:none; color:#fff; font-size: 24px; width: 50px; height:50px; border-radius: 50%; cursor:pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">&rarr;</button>
+        </div>
+    </div>
+
+    <script src="vendor/jszip.min.js"></script>
+    <script src="vendor/pptxgen.min.js"></script>
+    <script src="vendor/docx.umd.js"></script>
+    <script src="vendor/FileSaver.min.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>
