@@ -492,10 +492,19 @@ body {
   flex-wrap: wrap;
 }
 
+.toolbar-inline-section {
+  justify-content: flex-end;
+}
+
 .toolbar-inline label {
   font-size: 13px;
   color: var(--text-light);
   font-weight: 700;
+}
+
+.section-merge-hint {
+  margin-top: -4px;
+  margin-bottom: 18px;
 }
 
 .form-grid {

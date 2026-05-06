@@ -231,8 +231,15 @@
                                         </h2>
                                         <div class="inline-help-popup" id="tooltipPautas" role="tooltip">
                                             <strong>Dica de escrita</strong>
-                                            <p>Para deliberações, use fórmulas curtas e objetivas.</p>
+                                    <div class="toolbar-inline toolbar-inline-section">
+                                        <button id="btnExportarPautas" class="btn" type="button">↗️ Exportar contribuição</button>
+                                        <button id="btnMesclarPautas" class="btn" type="button">🔀 Mesclar arquivo</button>
+                                        <input id="inputMergePautas" type="file" accept=".json" hidden>
+                                        <button id="btnAddPauta" class="btn primary" type="button">➕ Nova Pauta</button>
+                                    </div>
                                             <ul class="plain-list compact-list">
+
+                                <p class="helper section-merge-hint">Contribuições de Pautas mesclam só esta seção e não removem itens existentes automaticamente.</p>
                                                 <li><strong>Encaminhamento:</strong> ficou definido que...</li>
                                                 <li><strong>Deliberação:</strong> aprovou-se...</li>
                                                 <li><strong>Prazo/Responsável:</strong> até DD/MM, responsável: Fulano(a).</li>
@@ -256,8 +263,15 @@
                                         <h2>Informes</h2>
                                         <p>Registre avisos, comunicações e observações gerais da sessão.</p>
                                     </div>
-                                    <button id="btnAddInforme" class="btn primary">➕ Novo Informe</button>
+                                    <div class="toolbar-inline toolbar-inline-section">
+                                        <button id="btnExportarInformes" class="btn" type="button">↗️ Exportar contribuição</button>
+                                        <button id="btnMesclarInformes" class="btn" type="button">🔀 Mesclar arquivo</button>
+                                        <input id="inputMergeInformes" type="file" accept=".json" hidden>
+                                        <button id="btnAddInforme" class="btn primary" type="button">➕ Novo Informe</button>
+                                    </div>
                                 </div>
+
+                                <p class="helper section-merge-hint">Contribuições de Informes mesclam só esta seção e não removem itens existentes automaticamente.</p>
 
                                 <div id="informes-container"></div>
                             </div>

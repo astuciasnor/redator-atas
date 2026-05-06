@@ -2,6 +2,8 @@ const STORAGE_KEY = "fepesca_ata_state";
 const STORAGE_VERSION = 2;
 const DEFAULT_THEME = "light";
 const PENDING_TOAST_KEY = "fepesca_pending_toast";
+const CONTRIBUTION_KIND = "fepesca-section-contribution";
+const CONTRIBUTION_VERSION = 1;
 const DEFAULT_TIPO_REUNIAO = "reunião ordinária";
 const DEFAULT_COLEGIADO = "Conselho Deliberativo da Faculdade de Engenharia de Pesca";
 const DEFAULT_LOGOS = {
@@ -39,6 +41,7 @@ let logos = { ...DEFAULT_LOGOS };
 let ataSincronizada = true;
 let browserSlides = [];
 let currentSlide = 0;
+let mergeBases = { pautas: [], informes: [] };
 
 const LOGO_FIELDS = [
     { key: "fepesca", inputId: "logoFepescaUpload", previewId: "logoFepescaPreview", placeholderId: "logoFepescaPlaceholder", docImgId: "docLogoFepesca", docSlotId: "docLogoFepescaSlot" },
@@ -113,6 +116,12 @@ function setupGlobalListeners() {
 
     on("btnExportarSessao", "click", exportarSessaoJSON);
     on("btnImportarSessao", "change", importarSessaoJSON);
+    on("btnExportarPautas", "click", () => exportarContribuicaoSecao("pautas"));
+    on("btnMesclarPautas", "click", () => byId("inputMergePautas")?.click());
+    on("inputMergePautas", "change", (event) => importarContribuicaoSecao(event, "pautas"));
+    on("btnExportarInformes", "click", () => exportarContribuicaoSecao("informes"));
+    on("btnMesclarInformes", "click", () => byId("inputMergeInformes")?.click());
+    on("inputMergeInformes", "change", (event) => importarContribuicaoSecao(event, "informes"));
     on("btnToggleTema", "click", toggleTheme);
     on("btnLimpar", "click", limparMarcacoes);
     on("btnAdicionar", "click", addNovoMembro);
@@ -293,6 +302,183 @@ function importarSessaoJSON(event) {
     };
     reader.readAsText(file);
     event.target.value = "";
+}
+
+function exportarContribuicaoSecao(section) {
+    if (!hasMeetingIdentity()) {
+        alert("Preencha número da ata e data antes de exportar contribuições.");
+        return;
+    }
+
+    const items = cloneSectionItems(getSectionItems(section));
+    if (items.length === 0) {
+        alert(`Nenhum item em ${getSectionLabel(section)} para exportar.`);
+        return;
+    }
+
+    const contribution = buildSectionContribution(section);
+    const blob = new Blob([JSON.stringify(contribution, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = buildSectionContributionFileName(section);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast(`Contribuição de ${getSectionLabel(section)} preparada em JSON.`, "success");
+}
+
+function importarContribuicaoSecao(event, expectedSection) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+        try {
+            const parsed = JSON.parse(loadEvent.target.result);
+            const result = processarContribuicaoSecao(parsed, expectedSection);
+            const resumo = formatarResumoMescla(expectedSection, result);
+            showToast(ataSincronizada ? resumo : `${resumo} Revise a ata manual.`, "success");
+        } catch (error) {
+            alert(error.message || "Não foi possível mesclar o arquivo selecionado.");
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+}
+
+function processarContribuicaoSecao(payload, expectedSection) {
+    if (!hasMeetingIdentity()) {
+        throw new Error("Preencha número da ata e data antes de mesclar contribuições.");
+    }
+
+    validarContribuicaoSecao(payload, expectedSection);
+    const result = mesclarContribuicaoSecao(payload, expectedSection);
+
+    if (result.changed) {
+        if (expectedSection === "pautas") renderPautas();
+        if (expectedSection === "informes") renderInformes();
+        sincronizarAtaSePossivel();
+        salvarEstado();
+    }
+
+    return result;
+}
+
+function validarContribuicaoSecao(payload, expectedSection) {
+    if (!payload || payload.kind !== CONTRIBUTION_KIND) {
+        throw new Error("Arquivo de contribuição inválido.");
+    }
+
+    if (payload.version !== CONTRIBUTION_VERSION) {
+        throw new Error("Esta contribuição foi gerada em uma versão incompatível.");
+    }
+
+    if (payload.section !== expectedSection) {
+        throw new Error(`Este arquivo é de ${getSectionLabel(payload.section)}, não de ${getSectionLabel(expectedSection)}.`);
+    }
+
+    if (!Array.isArray(payload.items) || !Array.isArray(payload.baseItems)) {
+        throw new Error("A contribuição está incompleta ou corrompida.");
+    }
+
+    if (payload.meetingKey !== buildMeetingKey()) {
+        throw new Error("Esta contribuição pertence a outra reunião. Confira número da ata e data antes de mesclar.");
+    }
+}
+
+function mesclarContribuicaoSecao(payload, section) {
+    const currentItems = cloneSectionItems(getSectionItems(section));
+    const incomingItems = cloneSectionItems(payload.items);
+    const baseItems = cloneSectionItems(payload.baseItems);
+    const baseMap = new Map(baseItems.map((item) => [String(item.id), item]));
+
+    const result = {
+        added: 0,
+        updated: 0,
+        conflicts: 0,
+        unchanged: 0,
+        changed: false,
+    };
+
+    incomingItems.forEach((incomingItem) => {
+        const itemId = String(incomingItem.id);
+        const currentIndex = currentItems.findIndex((item) => String(item.id) === itemId);
+        const currentItem = currentIndex >= 0 ? currentItems[currentIndex] : null;
+        const baseItem = baseMap.get(itemId);
+
+        if (!currentItem) {
+            currentItems.push({ ...incomingItem });
+            result.added += 1;
+            result.changed = true;
+            return;
+        }
+
+        if (isSameSectionItem(currentItem, incomingItem)) {
+            result.unchanged += 1;
+            return;
+        }
+
+        if (!baseItem) {
+            result.conflicts += 1;
+            if (confirmMergeConflict(section, currentItem, incomingItem)) {
+                currentItems[currentIndex] = { ...incomingItem };
+                result.updated += 1;
+                result.changed = true;
+            }
+            return;
+        }
+
+        const localChanged = !isSameSectionItem(currentItem, baseItem);
+        const incomingChanged = !isSameSectionItem(incomingItem, baseItem);
+
+        if (!localChanged && incomingChanged) {
+            currentItems[currentIndex] = { ...incomingItem };
+            result.updated += 1;
+            result.changed = true;
+            return;
+        }
+
+        if (localChanged && !incomingChanged) {
+            result.unchanged += 1;
+            return;
+        }
+
+        if (!localChanged && !incomingChanged) {
+            result.unchanged += 1;
+            return;
+        }
+
+        result.conflicts += 1;
+        if (confirmMergeConflict(section, currentItem, incomingItem)) {
+            currentItems[currentIndex] = { ...incomingItem };
+            result.updated += 1;
+            result.changed = true;
+        }
+    });
+
+    setSectionItems(section, currentItems);
+    mergeBases[section] = cloneSectionItems(currentItems);
+    return result;
+}
+
+function confirmMergeConflict(section, currentItem, incomingItem) {
+    const singular = getSectionSingularLabel(section);
+    const atual = truncateText(currentItem.title || "Sem título", 90);
+    const importado = truncateText(incomingItem.title || "Sem título", 90);
+    return confirm(
+        `Conflito em ${singular}.\n\nAtual: ${atual}\nImportado: ${importado}\n\nOK = usar versão importada\nCancelar = manter versão atual.`
+    );
+}
+
+function formatarResumoMescla(section, result) {
+    const partes = [];
+    if (result.added) partes.push(`${result.added} novo(s)`);
+    if (result.updated) partes.push(`${result.updated} atualizado(s)`);
+    if (result.conflicts) partes.push(`${result.conflicts} conflito(s) revisado(s)`);
+    if (!partes.length) partes.push("sem alterações");
+    return `${getSectionLabel(section)} mesclados: ${partes.join(", ")}.`;
 }
 
 function limparMarcacoes() {
@@ -524,6 +710,84 @@ function renderInformes() {
     }
     container.innerHTML = informes.map((item, index) => criarItemHTML(item, "informe", index)).join("");
     bindItemEvents(container, informes);
+}
+
+function getSectionItems(section) {
+    return section === "informes" ? informes : pautas;
+}
+
+function setSectionItems(section, items) {
+    if (section === "informes") {
+        informes = items;
+        return;
+    }
+    pautas = items;
+}
+
+function cloneSectionItems(items) {
+    const baseId = Date.now();
+    return (Array.isArray(items) ? items : []).map((item, index) => ({
+        id: item?.id ?? `${baseId}-${index}`,
+        title: esc(item?.title),
+        text: esc(item?.text),
+    }));
+}
+
+function restoreSectionBases(state) {
+    mergeBases = {
+        pautas: Array.isArray(state?.mergeBases?.pautas) ? cloneSectionItems(state.mergeBases.pautas) : cloneSectionItems(pautas),
+        informes: Array.isArray(state?.mergeBases?.informes) ? cloneSectionItems(state.mergeBases.informes) : cloneSectionItems(informes),
+    };
+}
+
+function isSameSectionItem(left, right) {
+    return esc(left?.title) === esc(right?.title)
+        && esc(left?.text) === esc(right?.text);
+}
+
+function hasMeetingIdentity() {
+    return Boolean(esc(byId("numeroAta")?.value) && esc(byId("dataReuniao")?.value));
+}
+
+function buildMeetingKey(meta = {}) {
+    const numero = sanitizeFilePart(meta.numero ?? byId("numeroAta")?.value ?? "ata");
+    const data = esc(meta.data ?? byId("dataReuniao")?.value) || "sem-data";
+    return `${numero}__${data}`;
+}
+
+function buildSectionContribution(section) {
+    return {
+        kind: CONTRIBUTION_KIND,
+        version: CONTRIBUTION_VERSION,
+        section,
+        meetingKey: buildMeetingKey(),
+        meta: {
+            numero: esc(byId("numeroAta")?.value),
+            data: esc(byId("dataReuniao")?.value),
+            titulo: esc(byId("tituloReuniao")?.value),
+        },
+        exportedAt: new Date().toISOString(),
+        baseItems: cloneSectionItems(mergeBases[section]),
+        items: cloneSectionItems(getSectionItems(section)),
+    };
+}
+
+function buildSectionContributionFileName(section) {
+    return `Contribuicao_${getSectionLabel(section)}_FEPESCA_${buildMeetingToken()}_enviado-${formatTimestampNow()}.json`;
+}
+
+function getSectionLabel(section) {
+    return section === "informes" ? "Informes" : "Pautas";
+}
+
+function getSectionSingularLabel(section) {
+    return section === "informes" ? "informe" : "pauta";
+}
+
+function truncateText(value, maxLength = 90) {
+    const text = esc(value);
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
 function collectAttendance() {
@@ -1262,6 +1526,10 @@ function salvarEstado() {
         },
         tema: document.body.getAttribute("data-theme") || DEFAULT_THEME,
         logos,
+        mergeBases: {
+            pautas: cloneSectionItems(mergeBases.pautas),
+            informes: cloneSectionItems(mergeBases.informes),
+        },
         membrosOriginais,
         membrosExtras,
         pautas,
@@ -1282,6 +1550,7 @@ function restaurarEstado() {
         setHoje();
         setPautasPadrao();
         setInformesPadrao();
+        restoreSectionBases();
         document.body.setAttribute("data-theme", DEFAULT_THEME);
         return;
     }
@@ -1334,12 +1603,14 @@ function restaurarEstado() {
         if (!byId("dataReuniao").value) setHoje();
         if (!Array.isArray(state.pautas)) setPautasPadrao();
         if (!Array.isArray(state.informes)) setInformesPadrao();
+        restoreSectionBases(state);
     } catch (error) {
         console.warn("Falha ao recuperar o estado salvo.", error);
         logos = { ...DEFAULT_LOGOS };
         setHoje();
         setPautasPadrao();
         setInformesPadrao();
+        restoreSectionBases();
         document.body.setAttribute("data-theme", DEFAULT_THEME);
     }
 }
