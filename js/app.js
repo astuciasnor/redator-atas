@@ -446,7 +446,7 @@ function criarItemHTML(item, tipo, index) {
         </div>
       </div>
       <div class="item-body">
-         <textarea class="editar-texto" placeholder="O que foi discutido, informado ou deliberado?">${escapeHtml(item.text)}</textarea>
+                 <textarea class="editar-texto" rows="3" placeholder="O que foi discutido, informado ou deliberado?">${escapeHtml(item.text)}</textarea>
       </div>
     </div>
   `;

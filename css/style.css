@@ -893,7 +893,7 @@ tbody tr:last-child td {
 }
 
 .item .editar-texto {
-  min-height: 130px;
+  min-height: calc(3 * 1.6em + 24px);
   resize: vertical;
   line-height: 1.6;
 }
