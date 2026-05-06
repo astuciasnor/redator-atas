@@ -411,6 +411,80 @@ body {
   align-items: flex-start;
 }
 
+.section-title-with-tip {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.inline-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: help;
+  border-bottom: 1px dashed color-mix(in srgb, var(--brand) 45%, var(--border));
+}
+
+.inline-help-trigger::after {
+  content: "?";
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.inline-help-popup {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  width: min(360px, calc(100vw - 64px));
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--brand) 24%, var(--border));
+  border-radius: var(--radius2);
+  background: color-mix(in srgb, var(--panel) 96%, white 4%);
+  box-shadow: var(--shadow2);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.section-title-with-tip:hover .inline-help-popup,
+.section-title-with-tip:focus-within .inline-help-popup {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.inline-help-popup strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.inline-help-popup p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+.compact-list {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.compact-list li + li {
+  margin-top: 6px;
+}
+
 .toolbar-inline {
   display: flex;
   gap: 10px;
@@ -801,7 +875,9 @@ tbody tr:last-child td {
 
 .itemtitle {
   flex: 1;
-  min-height: 52px;
+  height: calc(2 * 1.4em + 24px);
+  min-height: calc(2 * 1.4em + 24px);
+  max-height: calc(2 * 1.4em + 24px);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text);
@@ -809,13 +885,14 @@ tbody tr:last-child td {
   font-weight: 800;
   line-height: 1.4;
   resize: none;
+  overflow-y: auto;
 }
 
 .item-body {
   padding: 16px;
 }
 
-.item textarea {
+.item .editar-texto {
   min-height: 130px;
   resize: vertical;
   line-height: 1.6;
@@ -1097,6 +1174,10 @@ textarea.output {
   .toolbar-inline {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .inline-help-popup {
+    width: min(320px, calc(100vw - 48px));
   }
 
   .doc-page {

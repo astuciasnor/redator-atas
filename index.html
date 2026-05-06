@@ -222,28 +222,29 @@
                     </section>
 
                     <section id="pautas" class="tabcontent">
-                        <div class="split">
-                            <div class="card">
-                                <div class="cardhead-inline">
-                                    <div>
-                                        <h2>Pautas</h2>
-                                        <p>Registre os pontos da ordem do dia e as deliberações correspondentes.</p>
+                        <div class="card">
+                            <div class="cardhead-inline">
+                                <div>
+                                    <div class="section-title-with-tip">
+                                        <h2>
+                                            <span class="inline-help-trigger" tabindex="0" aria-describedby="tooltipPautas">Pautas</span>
+                                        </h2>
+                                        <div class="inline-help-popup" id="tooltipPautas" role="tooltip">
+                                            <strong>Dica de escrita</strong>
+                                            <p>Para deliberações, use fórmulas curtas e objetivas.</p>
+                                            <ul class="plain-list compact-list">
+                                                <li><strong>Encaminhamento:</strong> ficou definido que...</li>
+                                                <li><strong>Deliberação:</strong> aprovou-se...</li>
+                                                <li><strong>Prazo/Responsável:</strong> até DD/MM, responsável: Fulano(a).</li>
+                                            </ul>
+                                        </div>
                                     </div>
-                                    <button id="btnAddPauta" class="btn primary">➕ Nova Pauta</button>
+                                    <p>Registre os pontos da ordem do dia e as deliberações correspondentes.</p>
                                 </div>
-
-                                <div id="pautas-container"></div>
+                                <button id="btnAddPauta" class="btn primary">➕ Nova Pauta</button>
                             </div>
 
-                            <div class="card helper-card">
-                                <h3>Dica de escrita</h3>
-                                <p>Para deliberações, use fórmulas curtas e objetivas.</p>
-                                <ul class="plain-list">
-                                    <li><strong>Encaminhamento:</strong> ficou definido que...</li>
-                                    <li><strong>Deliberação:</strong> aprovou-se...</li>
-                                    <li><strong>Prazo/Responsável:</strong> até DD/MM, responsável: Fulano(a).</li>
-                                </ul>
-                            </div>
+                            <div id="pautas-container"></div>
                         </div>
                     </section>
 
