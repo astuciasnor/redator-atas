@@ -200,7 +200,7 @@
                             </div>
 
                             <div class="searchbar">
-                                <input id="busca" type="text" placeholder="Buscar participante por nome ou função..." />
+                                <input id="busca" type="text" placeholder="Buscar participante por nome, identificador ou função..." />
                                 <button id="btnLimpar" class="btn" type="button">🧹 Limpar marcações</button>
                                 <button id="btnCSV" class="btn" type="button">⬇️ Baixar CSV</button>
                             </div>
@@ -210,9 +210,10 @@
                                     <thead>
                                         <tr>
                                             <th>Participante</th>
-                                            <th style="width: 200px">Presença</th>
+                                            <th style="width: 180px">Identificador</th>
+                                            <th style="width: 180px">Presença</th>
                                             <th>Motivo da ausência</th>
-                                            <th style="width: 100px; text-align:center;">Ações</th>
+                                            <th style="width: 120px; text-align:center;">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody id="tbody-membros"></tbody>
@@ -222,63 +223,68 @@
                     </section>
 
                     <section id="pautas" class="tabcontent">
-                        <div class="card">
-                            <div class="cardhead-inline">
-                                <div>
-                                    <div class="section-title-with-tip">
-                                        <h2>
-                                            <span class="inline-help-trigger" tabindex="0" aria-describedby="tooltipPautas">Pautas</span>
-                                        </h2>
-                                        <div class="inline-help-popup" id="tooltipPautas" role="tooltip">
-                                            <strong>Dica de escrita</strong>
-                                    <div class="toolbar-inline toolbar-inline-section">
-                                        <button id="btnExportarPautas" class="btn" type="button">↗️ Exportar contribuição</button>
-                                        <button id="btnMesclarPautas" class="btn" type="button">🔀 Mesclar arquivo</button>
-                                        <input id="inputMergePautas" type="file" accept=".json" hidden>
-                                        <button id="btnAddPauta" class="btn primary" type="button">➕ Nova Pauta</button>
-                                    </div>
-                                            <ul class="plain-list compact-list">
-
-                                <p class="helper section-merge-hint">Contribuições de Pautas mesclam só esta seção e não removem itens existentes automaticamente.</p>
-                                                <li><strong>Encaminhamento:</strong> ficou definido que...</li>
-                                                <li><strong>Deliberação:</strong> aprovou-se...</li>
-                                                <li><strong>Prazo/Responsável:</strong> até DD/MM, responsável: Fulano(a).</li>
-                                            </ul>
+                        <div class="telegraphic-layout">
+                            <div class="telegraphic-center">
+                                <div class="card telegraphic-center-head">
+                                    <div class="cardhead-inline cardhead-inline--top">
+                                        <div>
+                                            <div class="section-title-with-tip">
+                                                <h2>
+                                                    <span class="inline-help-trigger" tabindex="0" aria-describedby="tooltipPautas">Pautas</span>
+                                                </h2>
+                                                <div class="inline-help-popup" id="tooltipPautas" role="tooltip">
+                                                    <strong>Dica de escrita</strong>
+                                                    <p>Escreva em linhas curtas. Use o identificador escolhido na lista de presença e feche cada pauta com deliberação e encaminhamento.</p>
+                                                    <ul class="plain-list compact-list">
+                                                        <li><strong>F:</strong> fala principal do professor.</li>
+                                                        <li><strong>A:</strong> adendo ou complemento de outra fala.</li>
+                                                        <li><strong>D / V / E:</strong> deliberação, votação e encaminhamento.</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                            <p>Título acima e texto telegráfico logo abaixo.</p>
+                                        </div>
+                                        <div class="toolbar-inline telegraphic-toolbar">
+                                            <button id="btnExportarPautasTXT" class="btn" type="button">📝 Texto .txt</button>
+                                            <button id="btnMesclarPautas" class="btn" type="button">🔀 Mesclar JSON</button>
+                                            <button id="btnExportarPautas" class="btn" type="button">↗️ Contribuição JSON</button>
+                                            <button id="btnLimparPautas" class="btn" type="button">🧹 Limpar tudo</button>
+                                            <input id="inputMergePautas" type="file" accept=".json" hidden>
+                                            <button id="btnAddPauta" class="btn primary" type="button">➕ Nova Pauta</button>
                                         </div>
                                     </div>
-                                    <p>Registre os pontos da ordem do dia e as deliberações correspondentes.</p>
+                                    <p class="helper section-merge-hint">O arquivo .txt reúne todas as pautas em texto telegráfico; a contribuição JSON continua servindo para mescla por seção.</p>
                                 </div>
-                                <button id="btnAddPauta" class="btn primary">➕ Nova Pauta</button>
+                                <div class="telegraphic-scroll">
+                                    <div id="pautas-container"></div>
+                                </div>
                             </div>
-
-                            <div id="pautas-container"></div>
                         </div>
                     </section>
 
                     <section id="informes" class="tabcontent">
-                        <div class="split">
-                            <div class="card">
-                                <div class="cardhead-inline">
-                                    <div>
-                                        <h2>Informes</h2>
-                                        <p>Registre avisos, comunicações e observações gerais da sessão.</p>
+                        <div class="telegraphic-layout">
+                            <div class="telegraphic-center">
+                                <div class="card telegraphic-center-head">
+                                    <div class="cardhead-inline cardhead-inline--top">
+                                        <div>
+                                            <h2>Informes</h2>
+                                            <p>Título acima e registro telegráfico logo abaixo.</p>
+                                        </div>
+                                        <div class="toolbar-inline telegraphic-toolbar">
+                                            <button id="btnExportarInformesTXT" class="btn" type="button">📝 Texto .txt</button>
+                                            <button id="btnMesclarInformes" class="btn" type="button">🔀 Mesclar JSON</button>
+                                            <button id="btnExportarInformes" class="btn" type="button">↗️ Contribuição JSON</button>
+                                            <button id="btnLimparInformes" class="btn" type="button">🧹 Limpar tudo</button>
+                                            <input id="inputMergeInformes" type="file" accept=".json" hidden>
+                                            <button id="btnAddInforme" class="btn primary" type="button">➕ Novo Informe</button>
+                                        </div>
                                     </div>
-                                    <div class="toolbar-inline toolbar-inline-section">
-                                        <button id="btnExportarInformes" class="btn" type="button">↗️ Exportar contribuição</button>
-                                        <button id="btnMesclarInformes" class="btn" type="button">🔀 Mesclar arquivo</button>
-                                        <input id="inputMergeInformes" type="file" accept=".json" hidden>
-                                        <button id="btnAddInforme" class="btn primary" type="button">➕ Novo Informe</button>
-                                    </div>
+                                    <p class="helper section-merge-hint">O arquivo .txt reúne todos os informes em texto telegráfico; a contribuição JSON continua servindo para mescla por seção.</p>
                                 </div>
-
-                                <p class="helper section-merge-hint">Contribuições de Informes mesclam só esta seção e não removem itens existentes automaticamente.</p>
-
-                                <div id="informes-container"></div>
-                            </div>
-
-                            <div class="card helper-card">
-                                <h3>Observação</h3>
-                                <p>Se o informe for apenas comunicacional, deixe a descrição em branco. Na ata sairá como registro sucinto do informe.</p>
+                                <div class="telegraphic-scroll">
+                                    <div id="informes-container"></div>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -323,6 +329,7 @@
                                 <button id="btnGerarAta" class="btn primary" type="button">🧾 Gerar texto base</button>
                                 <button id="btnCopiarAta" class="btn" type="button">📋 Copiar texto</button>
                                 <button id="btnBaixarAtaDOCX" class="btn" type="button">📄 Baixar DOCX</button>
+                                <button id="btnCopiarPromptIA" class="btn" type="button">🪄 Copiar prompt IA</button>
                             </div>
 
                             <div class="document-grid">
@@ -360,6 +367,17 @@
                                     <textarea id="saidaAta" class="output guardar"
                                         placeholder="Clique em 'Gerar texto base' ou edite manualmente o texto final aqui..."></textarea>
                                 </div>
+                            </div>
+
+                            <div class="prompt-output-shell">
+                                <div class="cardhead-inline cardhead-inline--top">
+                                    <div>
+                                        <h3>Prompt para IA</h3>
+                                        <p>Copie este texto, anexe o DOCX gerado e envie ambos à IA. O prompt já explica como ler os tópicos telegráficos das pautas e dos informes.</p>
+                                    </div>
+                                </div>
+                                <textarea id="saidaPromptIA" class="output output-compact" readonly
+                                    placeholder="O prompt para IA será montado automaticamente a partir da reunião."></textarea>
                             </div>
                         </div>
                     </section>

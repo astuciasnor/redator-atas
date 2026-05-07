@@ -73,6 +73,54 @@ const EMAIL_IDS = [
     "emailCargo",
 ];
 
+const TELEGRAPHIC_PLACEHOLDERS = {
+    pauta: [
+        "F: Roberta | propõe revisar fluxo",
+        "A: Carlos Cordeiro | sugere ouvir a secretaria",
+        "D: aprovada revisão parcial",
+        "V: aprovado por unanimidade",
+        "E: elaborar nova minuta",
+        "R: coordenação",
+        "P: próxima reunião",
+    ].join("\n"),
+    informe: [
+        "AP: Roberta | informou previsão de visita técnica",
+        "C: Nils | verificar disponibilidade de transporte",
+        "E: confirmar logística, se necessário",
+        "R: coordenação",
+        "P: até 20/05",
+    ].join("\n"),
+};
+
+const TELEGRAPHIC_LEGENDS = {
+    pauta: {
+        title: "Siglas da pauta",
+        note: "Exemplo de nome identificador: Roberta, Carlos Cordeiro, Rafael Chagas, Nils.",
+        items: [
+            ["F:", "fala principal de um docente"],
+            ["A:", "adendo, complemento ou observação adicional"],
+            ["D:", "deliberação final da pauta"],
+            ["V:", "resultado da votação, se houver"],
+            ["E:", "encaminhamento prático definido pelo grupo"],
+            ["R:", "responsável pelo encaminhamento"],
+            ["P:", "prazo ou marco temporal"],
+        ],
+    },
+    informe: {
+        title: "Siglas do informe",
+        note: "Se o informe for só comunicacional, basta AP e, se necessário, um ou dois complementos.",
+        items: [
+            ["AP:", "apresentação principal do informe"],
+            ["C:", "complemento ou observação adicional"],
+            ["E:", "encaminhamento, se o informe gerar ação"],
+            ["R:", "responsável pelo encaminhamento"],
+            ["P:", "prazo ou data de retorno"],
+        ],
+    },
+};
+
+const TELEGRAPHIC_SPEAKER_CODES = new Set(["F", "A", "AP", "C"]);
+
 document.addEventListener("DOMContentLoaded", async () => {
     setupTabs();
     setupGlobalListeners();
@@ -119,12 +167,16 @@ function setupGlobalListeners() {
 
     on("btnExportarSessao", "click", exportarSessaoJSON);
     on("btnImportarSessao", "change", importarSessaoJSON);
+    on("btnExportarPautasTXT", "click", () => exportarTextoTelegraficoSecao("pautas"));
     on("btnExportarPautas", "click", () => exportarContribuicaoSecao("pautas"));
     on("btnMesclarPautas", "click", () => byId("inputMergePautas")?.click());
     on("inputMergePautas", "change", (event) => importarContribuicaoSecao(event, "pautas"));
+    on("btnLimparPautas", "click", () => limparSecaoTelegráfica("pautas"));
+    on("btnExportarInformesTXT", "click", () => exportarTextoTelegraficoSecao("informes"));
     on("btnExportarInformes", "click", () => exportarContribuicaoSecao("informes"));
     on("btnMesclarInformes", "click", () => byId("inputMergeInformes")?.click());
     on("inputMergeInformes", "change", (event) => importarContribuicaoSecao(event, "informes"));
+    on("btnLimparInformes", "click", () => limparSecaoTelegráfica("informes"));
     on("btnToggleTema", "click", toggleTheme);
     on("btnLimpar", "click", limparMarcacoes);
     on("btnAdicionar", "click", addNovoMembro);
@@ -159,6 +211,10 @@ function setupGlobalListeners() {
 
     on("btnCopiarAta", "click", async () => {
         await copiarTexto(getTextoAtualAta(), "Texto da ata copiado.");
+    });
+
+    on("btnCopiarPromptIA", "click", async () => {
+        await copiarTexto(gerarPromptIAAta(), "Prompt para IA copiado.");
     });
 
     on("btnBaixarAtaDOCX", "click", exportarAtaDOCX);
@@ -231,8 +287,9 @@ function setupGlobalListeners() {
         const query = safeLower(event.target.value);
         document.querySelectorAll("#tabela tbody tr").forEach((row) => {
             const name = safeLower(row.querySelector(".name")?.textContent);
+            const identifier = safeLower(row.querySelector(".member-identificador")?.value);
             const role = safeLower(row.querySelector(".role")?.textContent);
-            row.style.display = (!query || name.includes(query) || role.includes(query)) ? "" : "none";
+            row.style.display = (!query || name.includes(query) || identifier.includes(query) || role.includes(query)) ? "" : "none";
         });
     });
 }
@@ -497,10 +554,106 @@ function limparMarcacoes() {
     salvarEstado();
 }
 
+function getTodosMembros() {
+    return [...membrosOriginais, ...membrosExtras];
+}
+
+function getFirstRelevantNamePart(nome) {
+    const partes = esc(nome).split(/\s+/).filter(Boolean);
+    const semConectores = partes.filter((parte) => !NAME_CONNECTORS.has(safeLower(parte)));
+    return semConectores[0] || partes[0] || "";
+}
+
+function buildBaseIdentifierOptions(nome) {
+    const nomeLimpo = esc(nome);
+    const partes = nomeLimpo.split(/\s+/).filter(Boolean);
+    const semConectores = partes.filter((parte) => !NAME_CONNECTORS.has(safeLower(parte)));
+    const primeiroNome = semConectores[0] || partes[0] || "";
+    const sobrenomeCurto = extrairSobrenomeCurto(partes);
+    const ultimoNome = semConectores[semConectores.length - 1] || partes[partes.length - 1] || "";
+    const opcoes = [];
+
+    [
+        primeiroNome,
+        primeiroNome && ultimoNome && `${primeiroNome} ${ultimoNome}`,
+        primeiroNome && sobrenomeCurto && `${primeiroNome} ${sobrenomeCurto}`,
+        ultimoNome,
+        nomeLimpo,
+    ].forEach((opcao) => {
+        const texto = esc(opcao);
+        if (!texto || opcoes.some((item) => safeLower(item) === safeLower(texto))) return;
+        opcoes.push(texto);
+    });
+
+    return opcoes;
+}
+
+function sugerirIdentificadorMembro(membro, todos = getTodosMembros()) {
+    const nome = esc(membro?.nome);
+    const opcoes = buildBaseIdentifierOptions(nome);
+    const primeiroNome = opcoes[0] || nome;
+    const repeticoesPrimeiroNome = todos.filter((item) => safeLower(getFirstRelevantNamePart(item?.nome)) === safeLower(primeiroNome)).length;
+    if (repeticoesPrimeiroNome <= 1) return primeiroNome;
+    return opcoes.find((opcao) => opcao.includes(" ")) || nome;
+}
+
+function garantirIdentificadoresMembros() {
+    const todos = getTodosMembros();
+    todos.forEach((membro) => {
+        if (!esc(membro.identificador)) {
+            membro.identificador = sugerirIdentificadorMembro(membro, todos);
+        }
+    });
+}
+
+function buildIdentifierOptionsForMember(membro, todos = getTodosMembros()) {
+    const opcoes = [];
+    [
+        esc(membro.identificador),
+        sugerirIdentificadorMembro(membro, todos),
+        ...buildBaseIdentifierOptions(membro.nome),
+    ].forEach((opcao) => {
+        const texto = esc(opcao);
+        if (!texto || opcoes.some((item) => safeLower(item) === safeLower(texto))) return;
+        opcoes.push(texto);
+    });
+    return opcoes;
+}
+
+function identificadorEmUso(valor, membroAtual) {
+    const alvo = safeLower(valor);
+    if (!alvo) return false;
+    return getTodosMembros().some((membro) => membro !== membroAtual && safeLower(membro.identificador) === alvo);
+}
+
+function getMemberIdentifierEntries() {
+    garantirIdentificadoresMembros();
+    return getTodosMembros()
+        .map((membro) => ({
+            nome: esc(membro.nome),
+            identificador: esc(membro.identificador),
+            funcao: esc(membro.funcao),
+        }))
+        .filter((item) => item.nome && item.identificador)
+        .sort((a, b) => a.identificador.localeCompare(b.identificador, "pt-BR", { sensitivity: "base" }));
+}
+
+function encontrarMembroPorReferencia(referencia) {
+    const alvo = safeLower(referencia);
+    if (!alvo) return null;
+    return getTodosMembros().find((membro) => safeLower(membro.identificador) === alvo || safeLower(membro.nome) === alvo) || null;
+}
+
+function resolverNomeCompletoPorReferencia(referencia) {
+    return encontrarMembroPorReferencia(referencia)?.nome || esc(referencia);
+}
+
 function renderTabelaMembros() {
     const tbody = byId("tbody-membros");
     if (!tbody) return;
     tbody.innerHTML = "";
+
+    garantirIdentificadoresMembros();
 
     const todos = [...membrosOriginais, ...membrosExtras]
         .slice()
@@ -512,6 +665,7 @@ function renderTabelaMembros() {
         const isAusente = membro.status === "ausente";
         const disableMotivo = !isAusente;
         const isExtra = membrosExtras.includes(membro);
+                const identifierOptions = buildIdentifierOptionsForMember(membro, todos);
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
@@ -519,6 +673,11 @@ function renderTabelaMembros() {
         <div class="name">${escapeHtml(membro.nome)}</div>
         <div class="role">${escapeHtml(membro.funcao || "—")} ${isExtra ? '<span style="color:var(--brand);font-weight:700">[Extra]</span>' : ""}</div>
       </td>
+            <td>
+                <select class="member-identificador" aria-label="Identificador do participante">
+                    ${identifierOptions.map((opcao) => `<option value="${escapeHtml(opcao)}" ${safeLower(opcao) === safeLower(membro.identificador) ? "selected" : ""}>${escapeHtml(opcao)}</option>`).join("")}
+                </select>
+            </td>
       <td>
         <div class="radio-group">
           <label class="radio-label">
@@ -541,8 +700,22 @@ function renderTabelaMembros() {
 
         const radios = tr.querySelectorAll(`input[name="${idUnico}"]`);
         const motivoInput = tr.querySelector(".motivo");
+        const identificadorSelect = tr.querySelector(".member-identificador");
         const btnExcluir = tr.querySelector(".btnExcluirMembro");
         const btnEditar = tr.querySelector(".btnEditarMembro");
+
+        identificadorSelect.addEventListener("change", (event) => {
+            const novoValor = esc(event.target.value);
+            if (!novoValor) return;
+            if (identificadorEmUso(novoValor, membro)) {
+                alert("Este identificador já está em uso por outro participante. Escolha outro para manter o autocomplete sem ambiguidades.");
+                event.target.value = membro.identificador;
+                return;
+            }
+            membro.identificador = novoValor;
+            sincronizarAtaSePossivel();
+            salvarEstado();
+        });
 
         btnEditar.addEventListener("click", () => {
             const novoNome = prompt("Editar nome do participante:", membro.nome);
@@ -551,6 +724,9 @@ function renderTabelaMembros() {
             if (novaFuncao === null) return;
             membro.nome = esc(novoNome);
             membro.funcao = esc(novaFuncao) || "—";
+            if (!esc(membro.identificador)) {
+                membro.identificador = sugerirIdentificadorMembro(membro, todos);
+            }
             renderTabelaMembros();
             sincronizarAtaSePossivel();
             salvarEstado();
@@ -604,7 +780,8 @@ function addNovoMembro() {
         return;
     }
 
-    membrosExtras.push({ nome, funcao, status: "presente", motivo: "" });
+    membrosExtras.push({ nome, funcao, identificador: "", status: "presente", motivo: "" });
+    garantirIdentificadoresMembros();
     byId("novoNome").value = "";
     byId("novaFuncao").value = "";
     renderTabelaMembros();
@@ -617,17 +794,24 @@ function criarItemHTML(item, tipo, index) {
     const isPauta = tipo === "pauta";
     const color = isPauta ? "var(--brand)" : "var(--warn)";
     const bg = isPauta ? "rgba(15,76,129,.10)" : "rgba(202,138,4,.12)";
+    const placeholder = getItemTextPlaceholder(tipo);
+    const helper = isPauta
+        ? "Use uma linha por fala, adendo, deliberação, votação ou encaminhamento. O nome pode ser só o identificador do docente."
+        : "Use AP para a apresentação principal e C para complementos. Só registre E, R e P se o informe gerar ação.";
 
     return `
     <div class="item" data-id="${item.id}">
       <div class="itemhead">
         <div class="item-title-wrapper">
-          <span class="badgeItem" style="background:${bg}; color:${color}; border:1px solid ${color};">
-            ${isPauta ? "Pauta" : "Informe"} ${index + 1}
-          </span>
+                    <details class="item-legend-menu">
+                        <summary class="badgeItem item-badge-toggle" style="background:${bg}; color:${color}; border:1px solid ${color};">
+                            ${isPauta ? "Pauta" : "Informe"} ${index + 1}
+                        </summary>
+                        ${buildLegendDropdownHTML(tipo)}
+                    </details>
           <textarea class="itemtitle editar-titulo" rows="2" placeholder="Digite o título...">${escapeHtml(item.title)}</textarea>
         </div>
-        <div class="item-actions" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <div class="item-actions">
           <button class="btn small btnTransformar" title="${isPauta ? "Transformar em Informe" : "Transformar em Pauta"}">↳ ${isPauta ? "P/ Informe" : "P/ Pauta"}</button>
           <button class="btn small btnMover" title="Mover para cima" data-dir="-1">↑</button>
           <button class="btn small btnMover" title="Mover para baixo" data-dir="1">↓</button>
@@ -635,10 +819,122 @@ function criarItemHTML(item, tipo, index) {
         </div>
       </div>
       <div class="item-body">
-                 <textarea class="editar-texto" rows="3" placeholder="O que foi discutido, informado ou deliberado?">${escapeHtml(item.text)}</textarea>
+        <span class="item-label">Texto telegráfico</span>
+        <textarea class="editar-texto" rows="8" placeholder="${escapeHtml(placeholder)}">${escapeHtml(item.text)}</textarea>
+        <div class="item-autocomplete" hidden></div>
+        <p class="item-helper">${helper}</p>
       </div>
     </div>
   `;
+}
+
+function getItemTextPlaceholder(tipo) {
+    return TELEGRAPHIC_PLACEHOLDERS[tipo] || "";
+}
+
+function buildLegendDropdownHTML(tipo) {
+        const legend = TELEGRAPHIC_LEGENDS[tipo] || TELEGRAPHIC_LEGENDS.pauta;
+        return `
+            <div class="item-legend-dropdown">
+                <strong class="item-legend-title">${escapeHtml(legend.title)}</strong>
+                <ul class="telegraphic-legend">
+                    ${legend.items.map(([code, text]) => `<li><span class="legend-code">${escapeHtml(code)}</span><span class="legend-text">${escapeHtml(text)}</span></li>`).join("")}
+                </ul>
+                <p class="helper item-legend-note">${escapeHtml(legend.note)}</p>
+            </div>
+        `;
+}
+
+function getTelegraphicAutocompleteContext(textarea) {
+    const value = String(textarea?.value ?? "");
+    const cursor = Number(textarea?.selectionStart ?? value.length);
+    const lineStart = value.lastIndexOf("\n", Math.max(cursor - 1, 0)) + 1;
+    const nextBreak = value.indexOf("\n", cursor);
+    const lineEnd = nextBreak === -1 ? value.length : nextBreak;
+    const lineFull = value.slice(lineStart, lineEnd);
+    const cursorInLine = cursor - lineStart;
+    const pipeIndex = lineFull.indexOf("|");
+    if (pipeIndex >= 0 && cursorInLine > pipeIndex) return null;
+
+    const prefix = value.slice(lineStart, cursor);
+    const match = prefix.match(/^\s*([A-Za-z]{1,3})\s*:\s*([^|\n]*)$/);
+    if (!match) return null;
+
+    const codigo = match[1].toUpperCase();
+    if (!TELEGRAPHIC_SPEAKER_CODES.has(codigo)) return null;
+
+    return {
+        lineStart,
+        lineEnd,
+        cursor,
+        codigo,
+        typedIdentifier: esc(match[2]),
+    };
+}
+
+function getAutocompleteIdentifierSuggestions(typedIdentifier) {
+    const query = safeLower(typedIdentifier);
+    if (query.length < 3) return [];
+    const tokenPattern = query ? new RegExp(`(^|\\s)${escapeRegExp(query)}`, "i") : null;
+    return getMemberIdentifierEntries()
+        .filter((item) => {
+            if (!query) return true;
+            return safeLower(item.identificador).startsWith(query)
+                || (tokenPattern ? tokenPattern.test(item.nome) : false);
+        })
+        .sort((a, b) => {
+            const aStarts = safeLower(a.identificador).startsWith(query) ? 0 : 1;
+            const bStarts = safeLower(b.identificador).startsWith(query) ? 0 : 1;
+            if (aStarts !== bStarts) return aStarts - bStarts;
+            return a.identificador.localeCompare(b.identificador, "pt-BR", { sensitivity: "base" });
+        })
+        .slice(0, 6);
+}
+
+function renderTelegraphicAutocomplete(textarea, container) {
+    const context = getTelegraphicAutocompleteContext(textarea);
+    if (!context || !container) {
+        if (container) {
+            container.hidden = true;
+            container.innerHTML = "";
+        }
+        return [];
+    }
+
+    const suggestions = getAutocompleteIdentifierSuggestions(context.typedIdentifier);
+    if (!suggestions.length) {
+        container.hidden = true;
+        container.innerHTML = "";
+        return [];
+    }
+
+    container.hidden = false;
+    container.innerHTML = suggestions.map((item, index) => `
+        <button type="button" class="autocomplete-option" data-index="${index}">
+            <strong>${escapeHtml(item.identificador)}</strong>
+            <span>${escapeHtml(item.nome)}</span>
+        </button>
+    `).join("");
+    return suggestions;
+}
+
+function aplicarSugestaoIdentificador(textarea, suggestion) {
+    const context = getTelegraphicAutocompleteContext(textarea);
+    if (!context || !suggestion) return false;
+
+    const value = String(textarea.value ?? "");
+    const before = value.slice(0, context.lineStart);
+    const afterLine = value.slice(context.lineEnd);
+    const linhaAtual = value.slice(context.lineStart, context.lineEnd);
+    const pipeIndex = linhaAtual.indexOf("|");
+    const existingContent = pipeIndex >= 0 ? esc(linhaAtual.slice(pipeIndex + 1)) : "";
+    const prefix = `${context.codigo}: ${suggestion.identificador} | `;
+    const novaLinha = existingContent ? `${prefix}${existingContent}` : prefix;
+
+    textarea.value = `${before}${novaLinha}${afterLine}`;
+    const nextCursor = before.length + prefix.length;
+    textarea.setSelectionRange(nextCursor, nextCursor);
+    return true;
 }
 
 function bindItemEvents(container, arrayOrigem) {
@@ -650,10 +946,60 @@ function bindItemEvents(container, arrayOrigem) {
             sincronizarAtaSePossivel();
             salvarEstado();
         });
-        div.querySelector(".editar-texto").addEventListener("input", (event) => {
-            obj.text = esc(event.target.value);
+        const textArea = div.querySelector(".editar-texto");
+        const autocompleteBox = div.querySelector(".item-autocomplete");
+        let currentSuggestions = [];
+
+        const syncText = () => {
+            obj.text = esc(textArea.value);
             sincronizarAtaSePossivel();
             salvarEstado();
+        };
+
+        const refreshAutocomplete = () => {
+            currentSuggestions = renderTelegraphicAutocomplete(textArea, autocompleteBox);
+            autocompleteBox.querySelectorAll(".autocomplete-option").forEach((button) => {
+                button.addEventListener("mousedown", (event) => event.preventDefault());
+                button.addEventListener("click", () => {
+                    const suggestion = currentSuggestions[Number(button.dataset.index)];
+                    if (!aplicarSugestaoIdentificador(textArea, suggestion)) return;
+                    autocompleteBox.hidden = true;
+                    autocompleteBox.innerHTML = "";
+                    syncText();
+                    textArea.focus();
+                });
+            });
+        };
+
+        textArea.addEventListener("input", () => {
+            refreshAutocomplete();
+            syncText();
+        });
+
+        textArea.addEventListener("click", refreshAutocomplete);
+        textArea.addEventListener("focus", refreshAutocomplete);
+
+        textArea.addEventListener("blur", () => {
+            window.setTimeout(() => {
+                autocompleteBox.hidden = true;
+                autocompleteBox.innerHTML = "";
+            }, 120);
+        });
+
+        textArea.addEventListener("keydown", (event) => {
+            if (event.key === "Tab") {
+                const suggestion = renderTelegraphicAutocomplete(textArea, autocompleteBox)[0];
+                if (!suggestion) return;
+                event.preventDefault();
+                if (!aplicarSugestaoIdentificador(textArea, suggestion)) return;
+                autocompleteBox.hidden = true;
+                autocompleteBox.innerHTML = "";
+                syncText();
+            }
+            if (event.key === "Escape") {
+                autocompleteBox.hidden = true;
+                autocompleteBox.innerHTML = "";
+            }
         });
 
         div.querySelector(".btnExcluir").addEventListener("click", () => {
@@ -727,6 +1073,26 @@ function setSectionItems(section, items) {
     pautas = items;
 }
 
+function limparSecaoTelegráfica(section) {
+    const label = getSectionLabel(section);
+    const items = getSectionItems(section);
+    if (!items.length) {
+        alert(`Não há itens em ${label} para limpar.`);
+        return;
+    }
+
+    if (!confirm(`Limpar todos os itens de ${label}? Esta ação remove títulos e textos desta seção.`)) {
+        return;
+    }
+
+    setSectionItems(section, []);
+    mergeBases[section] = [];
+    if (section === "informes") renderInformes();
+    else renderPautas();
+    sincronizarAtaSePossivel();
+    salvarEstado();
+}
+
 function cloneSectionItems(items) {
     const baseId = Date.now();
     return (Array.isArray(items) ? items : []).map((item, index) => ({
@@ -779,12 +1145,182 @@ function buildSectionContributionFileName(section) {
     return `Contribuicao_${getSectionLabel(section)}_FEPESCA_${buildMeetingToken()}_enviado-${formatTimestampNow()}.json`;
 }
 
+function buildSectionTextFileName(section) {
+    return `Texto_Telegrafico_${getSectionLabel(section)}_FEPESCA_${buildMeetingToken()}.txt`;
+}
+
 function getSectionLabel(section) {
     return section === "informes" ? "Informes" : "Pautas";
 }
 
 function getSectionSingularLabel(section) {
     return section === "informes" ? "informe" : "pauta";
+}
+
+function buildIdentifierMapText() {
+    const entries = getMemberIdentifierEntries();
+    if (!entries.length) return "Identificadores:\n- sem mapeamento registrado";
+    return `Identificadores:\n${entries.map((item) => `- ${item.identificador} = ${item.nome}`).join("\n")}`;
+}
+
+function buildSectionTelegraphicText(section) {
+    const items = getSectionItems(section);
+    const label = getSectionLabel(section).toUpperCase();
+    const heading = esc(byId("tituloReuniao")?.value) || DEFAULT_COLEGIADO;
+    const data = formatDateLonga(byId("dataReuniao")?.value);
+    const numero = esc(byId("numeroAta")?.value) || "__/____";
+
+    const blocos = items.map((item, index) => {
+        const titulo = esc(item.title) || `${getSectionSingularLabel(section)} ${index + 1}`;
+        const corpo = esc(item.text) || "[sem texto telegráfico]";
+        return `${index + 1}. ${titulo}\n${corpo}`;
+    });
+
+    return [
+        `${label} - ${heading}`,
+        `Ata: ${numero}`,
+        `Data: ${data}`,
+        "",
+        buildIdentifierMapText(),
+        "",
+        blocos.join("\n\n"),
+    ].join("\n");
+}
+
+function exportarTextoTelegraficoSecao(section) {
+    const items = getSectionItems(section);
+    if (!items.length) {
+        alert(`Nenhum item em ${getSectionLabel(section)} para exportar em texto.`);
+        return;
+    }
+
+    const blob = new Blob([buildSectionTelegraphicText(section)], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = buildSectionTextFileName(section);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast(`Texto telegráfico de ${getSectionLabel(section)} exportado em .txt.`, "success");
+}
+
+function splitTelegraphicLines(texto) {
+    return String(texto ?? "")
+        .split(/\r?\n/)
+        .map((line) => esc(line))
+        .filter(Boolean);
+}
+
+function splitSpeakerAndContent(texto) {
+    const [speakerPart, ...contentParts] = String(texto ?? "").split("|");
+    return {
+        speaker: esc(speakerPart),
+        content: esc(contentParts.join("|")),
+    };
+}
+
+function formatarLinhaTelegráficaParaAta(linha, tipo) {
+    const match = linha.match(/^([A-Za-z]{1,3})\s*:\s*(.+)$/);
+    if (!match) return linha;
+
+    const codigo = match[1].toUpperCase();
+    const conteudo = esc(match[2]);
+    const { speaker, content } = splitSpeakerAndContent(conteudo);
+    const speakerName = resolverNomeCompletoPorReferencia(speaker);
+
+    if (tipo === "pauta") {
+        if (codigo === "F") return speaker && content ? `registrou-se fala de ${speakerName}: ${content}` : conteudo;
+        if (codigo === "A") return speaker && content ? `registrou-se adendo de ${speakerName}: ${content}` : conteudo;
+        if (codigo === "D") return `deliberação: ${conteudo}`;
+        if (codigo === "V") return `votação: ${conteudo}`;
+        if (codigo === "E") return `encaminhamento: ${conteudo}`;
+        if (codigo === "R") return `responsável: ${conteudo}`;
+        if (codigo === "P") return `prazo: ${conteudo}`;
+    }
+
+    if (tipo === "informe") {
+        if (codigo === "AP") return speaker && content ? `apresentação de ${speakerName}: ${content}` : conteudo;
+        if (codigo === "C") return speaker && content ? `complemento de ${speakerName}: ${content}` : conteudo;
+        if (codigo === "E") return `encaminhamento: ${conteudo}`;
+        if (codigo === "R") return `responsável: ${conteudo}`;
+        if (codigo === "P") return `prazo: ${conteudo}`;
+    }
+
+    return linha;
+}
+
+function formatarTextoTelegraficoParaAta(texto, tipo) {
+    const linhas = splitTelegraphicLines(texto);
+    if (!linhas.length) return "";
+    return linhas
+        .map((linha) => formatarLinhaTelegráficaParaAta(linha, tipo))
+        .filter(Boolean)
+        .join("; ");
+}
+
+function buildPromptSectionIA(section) {
+    const label = getSectionLabel(section);
+    const items = getSectionItems(section);
+    if (!items.length) return `${label}:\n- Nenhum item registrado.`;
+
+    const blocos = items.map((item, index) => {
+        const linhas = splitTelegraphicLines(item.text);
+        const header = `${index + 1}. ${esc(item.title) || `${getSectionSingularLabel(section)} ${index + 1}`}`;
+        const body = linhas.length
+            ? linhas.map((linha) => `   - ${linha}`).join("\n")
+            : "   - sem tópicos telegráficos adicionais";
+        return `${header}\n${body}`;
+    });
+
+    return `${label}:\n${blocos.join("\n\n")}`;
+}
+
+function gerarPromptIAAta() {
+    const tipo = getTipoReuniaoAta();
+    const colegiado = getColegiadoAta();
+    const numero = esc(byId("numeroAta")?.value) || "__/____";
+    const data = formatDateLonga(byId("dataReuniao")?.value);
+    const local = esc(byId("localReuniao")?.value) || "local não informado";
+    const presidente = esc(byId("presidente")?.value) || "presidência não informada";
+
+    return [
+        `Use o DOCX anexado como documento-base desta ${tipo} do ${colegiado}.`,
+        "",
+        "Objetivo:",
+        "- transformar os tópicos telegráficos abaixo em texto institucional claro, coeso e conciso;",
+        "- preservar fielmente o conteúdo factual da reunião;",
+        "- aproveitar os nomes completos e o contexto institucional que já constam no DOCX.",
+        "",
+        "Regras obrigatórias:",
+        "- Não invente fatos, falas, deliberações, votações, responsáveis ou prazos.",
+        "- Considere que os identificadores curtos dos docentes correspondem aos nomes completos presentes no DOCX e na lista de presença.",
+        "- Na primeira menção de cada docente, use o nome completo.",
+        "- Nas menções seguintes, use Prof. ou Profa. + primeiro nome + sobrenome.",
+        "- Preserve a ordem das falas quando isso ajudar a manter o sentido da discussão.",
+        "- Se não houver votação, não invente votação.",
+        "- Se não houver responsável ou prazo, não acrescente.",
+        "- Converta os tópicos em linguagem acadêmica e administrativa, com boa fluidez e sem excesso de repetição.",
+        "",
+        "Identificação rápida da reunião:",
+        `- Ata: ${numero}`,
+        `- Data: ${data}`,
+        `- Local: ${local}`,
+        `- Presidência: ${presidente}`,
+        "",
+        buildIdentifierMapText(),
+        "",
+        buildPromptSectionIA("pautas"),
+        "",
+        buildPromptSectionIA("informes"),
+    ].join("\n");
+}
+
+function renderPromptIA() {
+    const out = byId("saidaPromptIA");
+    if (!out) return;
+    out.value = gerarPromptIAAta();
 }
 
 function truncateText(value, maxLength = 90) {
@@ -863,6 +1399,7 @@ function normalizarMembro(membro) {
     return {
         ...membro,
         nome,
+        identificador: esc(membro?.identificador),
         funcao: funcao || "—",
     };
 }
@@ -883,7 +1420,7 @@ function normalizarMembrosBase(lista) {
         const chave = safeLower(membro.nome);
         if (vistos.has(chave)) return;
         vistos.add(chave);
-        normalizados.push({ ...membro, status: "", motivo: "" });
+        normalizados.push({ ...membro, identificador: "", status: "", motivo: "" });
     });
 
     return normalizados;
@@ -942,8 +1479,9 @@ function gerarAtaInstitucional(isResumida) {
 
     if (informes.length > 0) {
         const corpoInformes = informes.map((item) => {
-            if (isResumida || !esc(item.text)) return finalizarFrase(item.title);
-            return finalizarFrase(`${item.title}: ${item.text}`);
+            const textoInforme = formatarTextoTelegraficoParaAta(item.text, "informe");
+            if (isResumida || !textoInforme) return finalizarFrase(item.title);
+            return finalizarFrase(`${item.title}: ${textoInforme}`);
         }).join(" ");
         paragraphs.push(`Nos informes, registrou-se o seguinte: ${corpoInformes}`);
     }
@@ -960,10 +1498,11 @@ function gerarAtaInstitucional(isResumida) {
             if (isResumida) {
                 return `Em relação à pauta \"${item.title}\", registrou-se discussão e encaminhamento em plenário.`;
             }
-            if (!esc(item.text)) {
+            const textoPauta = formatarTextoTelegraficoParaAta(item.text, "pauta");
+            if (!textoPauta) {
                 return `Em relação à pauta \"${item.title}\", registrou-se a discussão correspondente, sem detalhamento adicional nesta redação.`;
             }
-            return `Em relação à pauta \"${item.title}\", ${finalizarFrase(item.text)}`;
+            return `Em relação à pauta \"${item.title}\", ${finalizarFrase(textoPauta)}`;
         }).join(" ");
         paragraphs.push(discussoes);
     } else {
@@ -1106,6 +1645,7 @@ function renderAtaPreview() {
         .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`);
     corpo.innerHTML = paragraphs.join("");
     renderLogoPreview();
+    renderPromptIA();
 }
 
 function updateChips() {
@@ -1198,13 +1738,14 @@ function gerarTextoEmail() {
 }
 
 function exportarCSVPresencas() {
-    const rows = [["Participante", "Função", "Presença", "Motivo"]];
+    const rows = [["Participante", "Identificador", "Função", "Presença", "Motivo"]];
     [...membrosOriginais, ...membrosExtras]
         .slice()
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }))
         .forEach((item) => {
             rows.push([
                 item.nome,
+                item.identificador || "",
                 item.funcao || "—",
                 item.status || "",
                 item.motivo || "",
