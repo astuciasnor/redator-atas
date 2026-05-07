@@ -14,6 +14,7 @@ const jsonMembrosPadrao = [
   { nome: "Leonnan Carlos Carvalho de Oliveira", funcao: "Prof. Dr." },
   { nome: "Lorena Batista de Moura", funcao: "Profa. Dra." },
   { nome: "Marcos Ferreira Brabo", funcao: "Prof. Dr." },
+  { nome: "Nils Edvin Asp Neto", funcao: "Prof. Dr." },
   { nome: "Pedro Andrés Chira Oliva", funcao: "Prof. Dr." },
   { nome: "Rafael Anaisce das Chagas", funcao: "Prof. Dr." },
   { nome: "Breno Portilho de Sousa Maia", funcao: "Representante dos Técnicos" },

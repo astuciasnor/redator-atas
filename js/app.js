@@ -17,6 +17,7 @@ const MEMBER_RENAMES = {
     "Representante dos Técnicos da FEPESCA": "Breno Portilho de Sousa Maia",
 };
 const REQUIRED_MEMBERS = [
+    { nome: "Nils Edvin Asp Neto", funcao: "Prof. Dr." },
     { nome: "Rafael Anaisce das Chagas", funcao: "Prof. Dr." },
     { nome: "Ana Luiza Borges Guedes", funcao: "Representante Discente" },
     { nome: "Breno Portilho de Sousa Maia", funcao: "Representante dos Técnicos" },
@@ -26,6 +27,8 @@ const byId = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").trim();
 const sortAlphaPT = (arr) => arr.sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
 const safeLower = (value) => esc(value).toLowerCase();
+const NAME_CONNECTORS = new Set(["de", "da", "do", "das", "dos", "e"]);
+const FAMILY_SUFFIXES = new Set(["filho", "junior", "júnior", "neto", "sobrinho"]);
 const escapeHtml = (value) => String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -853,6 +856,7 @@ function normalizarMembro(membro) {
 
     if (nome === "Carlos Eduardo Rangel de Andrade") funcao = "Prof. Dr.";
     if (nome === "Ivan Lucas Fernandes Matos") funcao = "Representante Discente";
+    if (nome === "Nils Edvin Asp Neto") funcao = "Prof. Dr.";
     if (nome === "Rafael Anaisce das Chagas") funcao = "Prof. Dr.";
     if (nome === "Breno Portilho de Sousa Maia") funcao = "Representante dos Técnicos";
 
@@ -968,7 +972,91 @@ function gerarAtaInstitucional(isResumida) {
 
     paragraphs.push(`Nada mais havendo a tratar, a reunião foi encerrada às ${horaFim}. Eu, ${redigidaPor}, lavrei a presente ata, de número ${numero}, que, após lida e aprovada, seguirá para os trâmites institucionais de assinatura.`);
 
-    return paragraphs.filter(Boolean).join("\n\n");
+    return reduzirReferenciasDocentes(paragraphs.filter(Boolean).join("\n\n"));
+}
+
+function reduzirReferenciasDocentes(texto) {
+    let resultado = String(texto ?? "");
+
+    getDocentesReferenciaveis().forEach((docente) => {
+        const variantes = [`${docente.longPrefix} ${docente.nome}`, docente.nome]
+            .filter(Boolean)
+            .sort((a, b) => b.length - a.length)
+            .map(escapeRegExp);
+
+        if (!variantes.length) return;
+
+        let primeiraOcorrenciaMantida = false;
+        const regex = new RegExp(variantes.join("|"), "g");
+
+        resultado = resultado.replace(regex, (match) => {
+            if (!primeiraOcorrenciaMantida) {
+                primeiraOcorrenciaMantida = true;
+                return match;
+            }
+            return docente.shortReference;
+        });
+    });
+
+    return resultado;
+}
+
+function getDocentesReferenciaveis() {
+    const vistos = new Set();
+    const lista = [];
+
+    [...membrosOriginais, ...membrosExtras].forEach((membro) => {
+        const nome = esc(membro?.nome);
+        const funcao = normalizarFuncaoMembro(membro?.funcao);
+        if (!nome || !/^Prof\.|^Profa\./.test(funcao)) return;
+
+        const chave = safeLower(nome);
+        if (vistos.has(chave)) return;
+        vistos.add(chave);
+
+        const isDocenteMulher = funcao.startsWith("Profa.");
+        const longPrefix = isDocenteMulher ? "Profa. Dra." : "Prof. Dr.";
+        const shortPrefix = isDocenteMulher ? "Profa." : "Prof.";
+
+        lista.push({
+            nome,
+            longPrefix,
+            shortReference: `${shortPrefix} ${montarNomeCurtoDocente(nome)}`,
+        });
+    });
+
+    return lista.sort((a, b) => b.nome.length - a.nome.length);
+}
+
+function montarNomeCurtoDocente(nomeCompleto) {
+    const partes = esc(nomeCompleto).split(/\s+/).filter(Boolean);
+    if (partes.length <= 2) return partes.join(" ");
+
+    const primeiroNome = partes[0];
+    const sobrenome = extrairSobrenomeCurto(partes);
+    return sobrenome ? `${primeiroNome} ${sobrenome}` : primeiroNome;
+}
+
+function extrairSobrenomeCurto(partes) {
+    if (!Array.isArray(partes) || partes.length <= 1) return "";
+
+    const sobrenome = [partes[partes.length - 1]];
+    let cursor = partes.length - 2;
+
+    while (cursor > 0 && NAME_CONNECTORS.has(safeLower(partes[cursor]))) {
+        sobrenome.unshift(partes[cursor]);
+        cursor -= 1;
+    }
+
+    if (sobrenome.length === 1 && FAMILY_SUFFIXES.has(safeLower(sobrenome[0])) && cursor >= 1) {
+        sobrenome.unshift(partes[cursor]);
+    }
+
+    return sobrenome.join(" ");
+}
+
+function escapeRegExp(value) {
+    return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function getTextoAtualAta() {
