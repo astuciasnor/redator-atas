@@ -45,6 +45,12 @@ let ataSincronizada = true;
 let browserSlides = [];
 let currentSlide = 0;
 let mergeBases = { pautas: [], informes: [] };
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+let speechRecognition = null;
+let speechRecognitionActive = false;
+let speechRecognitionStopRequested = false;
+let speechRecognitionBaseText = "";
+let speechRecognitionFinalText = "";
 
 const LOGO_FIELDS = [
     { key: "fepesca", inputId: "logoFepescaUpload", previewId: "logoFepescaPreview", placeholderId: "logoFepescaPlaceholder", docImgId: "docLogoFepesca", docSlotId: "docLogoFepescaSlot" },
@@ -75,55 +81,102 @@ const EMAIL_IDS = [
 
 const TELEGRAPHIC_PLACEHOLDERS = {
     pauta: [
-        "F: Roberta | propõe revisar fluxo",
-        "A: Carlos Cordeiro | sugere ouvir a secretaria",
-        "D: aprovada revisão parcial",
-        "V: aprovado por unanimidade",
-        "E: elaborar nova minuta",
-        "R: coordenação",
-        "P: próxima reunião",
+        "Fulano | apresentou | situação do convênio e necessidade de ajuste",
+        "Sicrano | complementou | que o órgão ainda não respondeu",
+        "Beltrano | propôs | cobrar retorno até a próxima semana",
+        "Decisão | aprovada a cobrança formal ao órgão",
+        "Votação | aprovado por unanimidade",
+        "Encaminhamento | secretaria enviará novo ofício",
+        "Responsável | coordenação",
+        "Prazo | próxima reunião",
     ].join("\n"),
     informe: [
-        "AP: Roberta | informou previsão de visita técnica",
-        "C: Nils | verificar disponibilidade de transporte",
-        "E: confirmar logística, se necessário",
-        "R: coordenação",
-        "P: até 20/05",
+        "Fulano | informou | previsão de visita técnica em junho",
+        "Sicrano | complementou | necessidade de confirmar transporte",
+        "Encaminhamento | confirmar logística, se necessário",
+        "Responsável | coordenação",
+        "Prazo | até 20/05",
     ].join("\n"),
 };
 
 const TELEGRAPHIC_LEGENDS = {
     pauta: {
-        title: "Siglas da pauta",
-        note: "Exemplo de nome identificador: Roberta, Carlos Cordeiro, Rafael Chagas, Nils.",
+        title: "Estrutura sugerida",
+        note: "Use o identificador da lista de presença ou o nome completo. Registre as falas na ordem em que ocorreram.",
         items: [
-            ["F:", "fala principal de um docente"],
-            ["A:", "adendo, complemento ou observação adicional"],
-            ["D:", "deliberação final da pauta"],
-            ["V:", "resultado da votação, se houver"],
-            ["E:", "encaminhamento prático definido pelo grupo"],
-            ["R:", "responsável pelo encaminhamento"],
-            ["P:", "prazo ou marco temporal"],
+            ["Nome | tipo de fala | conteúdo essencial", "linha principal de cada intervenção"],
+            ["Decisão | resultado final", "fechamento da pauta"],
+            ["Votação | resultado da votação", "use apenas quando houver"],
+            ["Encaminhamento | ação definida", "providência prática aprovada"],
+            ["Responsável | nome ou setor", "quem executa o encaminhamento"],
+            ["Prazo | data ou marco", "quando retornar ao tema"],
         ],
     },
     informe: {
-        title: "Siglas do informe",
-        note: "Se o informe for só comunicacional, basta AP e, se necessário, um ou dois complementos.",
+        title: "Estrutura sugerida",
+        note: "Em informes, normalmente bastam as falas em sequência. Use encaminhamento, responsável e prazo só se o informe gerar ação.",
         items: [
-            ["AP:", "apresentação principal do informe"],
-            ["C:", "complemento ou observação adicional"],
-            ["E:", "encaminhamento, se o informe gerar ação"],
-            ["R:", "responsável pelo encaminhamento"],
-            ["P:", "prazo ou data de retorno"],
+            ["Nome | tipo de fala | conteúdo essencial", "linha principal de cada intervenção"],
+            ["Encaminhamento | ação definida", "registre apenas se houver desdobramento"],
+            ["Responsável | nome ou setor", "quem executa o encaminhamento"],
+            ["Prazo | data ou marco", "quando haverá retorno"],
         ],
     },
 };
 
-const TELEGRAPHIC_SPEAKER_CODES = new Set(["F", "A", "AP", "C"]);
+const TELEGRAPHIC_LEGACY_SPEAKER_CODES = new Set(["F", "A", "AP", "C"]);
+const TELEGRAPHIC_SPECIAL_LINE_LABELS = new Map([
+    ["encaminhamento", "encaminhamento"],
+    ["responsavel", "responsável"],
+    ["prazo", "prazo"],
+    ["decisao", "deliberação"],
+    ["deliberacao", "deliberação"],
+    ["votacao", "votação"],
+    ["resultado", "resultado"],
+]);
+const TELEGRAPHIC_AUTOCOMPLETE_MIN_LENGTH = 3;
+const TELEGRAPHIC_SPECIAL_LINE_SUGGESTIONS = [
+    { value: "Decisão", description: "resultado final do tema" },
+    { value: "Votação", description: "resultado da votação" },
+    { value: "Encaminhamento", description: "ação definida" },
+    { value: "Responsável", description: "quem executa" },
+    { value: "Prazo", description: "data ou marco" },
+    { value: "Resultado", description: "síntese do fechamento" },
+];
+const TELEGRAPHIC_ACTION_SUGGESTIONS = [
+    { value: "apresentou", description: "abriu o relato do tema" },
+    { value: "avaliou", description: "fez avaliação sobre o tema" },
+    { value: "comentou", description: "fez observação breve" },
+    { value: "informou", description: "trouxe dado ou atualização" },
+    { value: "relatou", description: "descreveu fato ou situação" },
+    { value: "explicou", description: "detalhou o ponto tratado" },
+    { value: "complementou", description: "acrescentou informação" },
+    { value: "esclareceu", description: "prestou esclarecimento" },
+    { value: "destacou", description: "enfatizou aspecto importante" },
+    { value: "ressaltou", description: "reforçou ponto relevante" },
+    { value: "observou", description: "registrou observação" },
+    { value: "mencionou", description: "fez referência a fato ou dado" },
+    { value: "lembrou", description: "recordou informação anterior" },
+    { value: "registrou", description: "consignou posição ou fato" },
+    { value: "manifestou", description: "expressou posição" },
+    { value: "ponderou", description: "apresentou ressalva ou cautela" },
+    { value: "questionou", description: "levantou dúvida" },
+    { value: "concordou", description: "aderiu ao entendimento apresentado" },
+    { value: "discordou", description: "divergiu do entendimento apresentado" },
+    { value: "propôs", description: "sugeriu encaminhamento" },
+    { value: "sugeriu", description: "indicou possibilidade ou ajuste" },
+    { value: "recomendou", description: "orientou providência" },
+    { value: "solicitou", description: "pediu providência ou informação" },
+    { value: "defendeu", description: "sustentou posicionamento" },
+    { value: "apoiou", description: "deu suporte a proposta ou posição" },
+    { value: "justificou", description: "apresentou motivo ou fundamento" },
+    { value: "encaminhou", description: "formalizou proposta" },
+];
 
 document.addEventListener("DOMContentLoaded", async () => {
     setupTabs();
     setupGlobalListeners();
+    setupSpeechToText();
 
     membrosOriginais = normalizarMembrosBase(await getMembrosList());
 
@@ -256,6 +309,8 @@ function setupGlobalListeners() {
     on("btnSairTelaCheia", "click", sairTelaCheia);
     on("btnSlideNext", "click", nextSlide);
     on("btnSlidePrev", "click", prevSlide);
+    on("btnIniciarDitado", "click", iniciarTranscricaoFala);
+    on("btnPararDitado", "click", pararTranscricaoFala);
 
     document.addEventListener("keydown", (event) => {
         const fs = byId("fullscreenSlides");
@@ -292,6 +347,142 @@ function setupGlobalListeners() {
             row.style.display = (!query || name.includes(query) || identifier.includes(query) || role.includes(query)) ? "" : "none";
         });
     });
+}
+
+function setupSpeechToText() {
+    updateSpeechControls("Preparando ditado...");
+    if (!SpeechRecognitionCtor) {
+        updateSpeechControls("Ditado indisponível");
+        const startBtn = byId("btnIniciarDitado");
+        const stopBtn = byId("btnPararDitado");
+        if (startBtn) startBtn.disabled = true;
+        if (stopBtn) stopBtn.disabled = true;
+        return;
+    }
+
+    speechRecognition = new SpeechRecognitionCtor();
+    speechRecognition.lang = "pt-BR";
+    speechRecognition.continuous = true;
+    speechRecognition.interimResults = true;
+    speechRecognition.maxAlternatives = 1;
+
+    speechRecognition.onstart = () => {
+        speechRecognitionActive = true;
+        speechRecognitionStopRequested = false;
+        updateSpeechControls("Ouvindo...", true);
+    };
+
+    speechRecognition.onresult = (event) => {
+        let interimText = "";
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            const result = event.results[index];
+            const transcript = normalizeSpeechFragment(result?.[0]?.transcript);
+            if (!transcript) continue;
+            if (result.isFinal) speechRecognitionFinalText = joinSpeechFragments(speechRecognitionFinalText, transcript);
+            else interimText = joinSpeechFragments(interimText, transcript);
+        }
+        applySpeechTranscriptToField(interimText);
+    };
+
+    speechRecognition.onerror = (event) => {
+        const errorCode = event?.error || "erro-desconhecido";
+        if (errorCode !== "aborted") {
+            showToast(mapSpeechRecognitionError(errorCode), "info");
+        }
+        speechRecognitionStopRequested = true;
+    };
+
+    speechRecognition.onend = () => {
+        speechRecognitionActive = false;
+        applySpeechTranscriptToField("");
+        updateSpeechControls(speechRecognitionStopRequested ? "Ditado interrompido" : "Pronto para ouvir");
+        speechRecognitionStopRequested = false;
+    };
+
+    updateSpeechControls("Pronto para ouvir");
+}
+
+function updateSpeechControls(statusText, isListening = false) {
+    const startBtn = byId("btnIniciarDitado");
+    const stopBtn = byId("btnPararDitado");
+    const status = byId("statusTranscricaoFala");
+    if (status) status.textContent = statusText;
+    if (startBtn) startBtn.disabled = !SpeechRecognitionCtor || isListening;
+    if (stopBtn) stopBtn.disabled = !SpeechRecognitionCtor || !isListening;
+}
+
+function normalizeSpeechFragment(value) {
+    return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function joinSpeechFragments(baseText, fragment) {
+    const left = normalizeSpeechFragment(baseText);
+    const right = normalizeSpeechFragment(fragment);
+    if (!left) return right;
+    if (!right) return left;
+    return `${left} ${right}`;
+}
+
+function buildSpeechTranscriptText(interimText = "") {
+    const baseText = String(speechRecognitionBaseText ?? "").trimEnd();
+    const liveText = joinSpeechFragments(speechRecognitionFinalText, interimText);
+    if (baseText && liveText) return `${baseText}\n${liveText}`;
+    return baseText || liveText;
+}
+
+function applySpeechTranscriptToField(interimText = "") {
+    const textarea = byId("transcricaoAudio");
+    if (!textarea) return;
+    const nextValue = buildSpeechTranscriptText(interimText);
+    if (textarea.value !== nextValue) {
+        textarea.value = nextValue;
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    const cursor = textarea.value.length;
+    textarea.setSelectionRange(cursor, cursor);
+}
+
+function mapSpeechRecognitionError(errorCode) {
+    const messages = {
+        "audio-capture": "Nenhum microfone foi encontrado para o ditado.",
+        "network": "O navegador não conseguiu processar o ditado agora.",
+        "not-allowed": "Permissão de microfone negada para o ditado.",
+        "service-not-allowed": "O serviço de ditado do navegador não está disponível.",
+        "no-speech": "Nenhuma fala foi detectada no ditado.",
+        "aborted": "Ditado interrompido.",
+    };
+    return messages[errorCode] || "Não foi possível concluir o ditado por voz.";
+}
+
+function iniciarTranscricaoFala() {
+    if (!speechRecognition) {
+        alert("O ditado por voz depende do reconhecimento de fala do navegador. Use Edge ou Chrome.");
+        return;
+    }
+    if (speechRecognitionActive) return;
+
+    const textarea = byId("transcricaoAudio");
+    if (!textarea) return;
+
+    speechRecognitionBaseText = String(textarea.value ?? "");
+    speechRecognitionFinalText = "";
+    speechRecognitionStopRequested = false;
+    updateSpeechControls("Conectando microfone...");
+
+    try {
+        speechRecognition.start();
+    } catch (error) {
+        console.error(error);
+        updateSpeechControls("Falha ao iniciar o ditado");
+        showToast("Não foi possível iniciar o ditado agora. Tente novamente.", "info");
+    }
+}
+
+function pararTranscricaoFala() {
+    if (!speechRecognition || !speechRecognitionActive) return;
+    speechRecognitionStopRequested = true;
+    updateSpeechControls("Encerrando ditado...");
+    speechRecognition.stop();
 }
 
 function handleEstruturaChange() {
@@ -796,8 +987,8 @@ function criarItemHTML(item, tipo, index) {
     const bg = isPauta ? "rgba(15,76,129,.10)" : "rgba(202,138,4,.12)";
     const placeholder = getItemTextPlaceholder(tipo);
     const helper = isPauta
-        ? "Use uma linha por fala, adendo, deliberação, votação ou encaminhamento. O nome pode ser só o identificador do docente."
-        : "Use AP para a apresentação principal e C para complementos. Só registre E, R e P se o informe gerar ação.";
+        ? "Use uma linha por intervenção, na ordem das falas. Modelo sugerido: Nome | tipo de fala | conteúdo essencial. Após 3 letras, pressione TAB para aceitar a primeira sugestão. Feche a pauta com Decisão, Votação, Encaminhamento, Responsável e Prazo quando houver."
+        : "Use uma linha por intervenção. Modelo sugerido: Nome | tipo de fala | conteúdo essencial. Após 3 letras, pressione TAB para aceitar a primeira sugestão. Se o informe gerar ação, registre Encaminhamento, Responsável e Prazo.";
 
     return `
     <div class="item" data-id="${item.id}">
@@ -819,7 +1010,7 @@ function criarItemHTML(item, tipo, index) {
         </div>
       </div>
       <div class="item-body">
-        <span class="item-label">Texto telegráfico</span>
+                <span class="item-label">Registro telegráfico</span>
         <textarea class="editar-texto" rows="8" placeholder="${escapeHtml(placeholder)}">${escapeHtml(item.text)}</textarea>
         <div class="item-autocomplete" hidden></div>
         <p class="item-helper">${helper}</p>
@@ -845,6 +1036,44 @@ function buildLegendDropdownHTML(tipo) {
         `;
 }
 
+function normalizeTelegraphicLabel(text) {
+    return safeLower(text)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isSpecialTelegraphicLabelPrefix(text) {
+    const normalized = normalizeTelegraphicLabel(text);
+    if (!normalized) return false;
+    return [...TELEGRAPHIC_SPECIAL_LINE_LABELS.keys()].some((item) => item.startsWith(normalized));
+}
+
+function parseLegacyTelegraphicAutocompleteContext(prefix) {
+    const match = prefix.match(/^\s*([A-Za-z]{1,3})\s*:\s*([^|\n]*)$/);
+    if (!match) return null;
+
+    const codigo = match[1].toUpperCase();
+    if (!TELEGRAPHIC_LEGACY_SPEAKER_CODES.has(codigo)) return null;
+
+    return {
+        mode: "legacy",
+        codigo,
+        typedIdentifier: esc(match[2]),
+    };
+}
+
+function parseStructuredTelegraphicAutocompleteContext(prefix) {
+    if (prefix.includes("|")) return null;
+
+    const typedIdentifier = esc(prefix);
+    if (!typedIdentifier) return null;
+
+    return {
+        mode: "structured-start",
+        typedIdentifier,
+    };
+}
+
 function getTelegraphicAutocompleteContext(textarea) {
     const value = String(textarea?.value ?? "");
     const cursor = Number(textarea?.selectionStart ?? value.length);
@@ -853,28 +1082,40 @@ function getTelegraphicAutocompleteContext(textarea) {
     const lineEnd = nextBreak === -1 ? value.length : nextBreak;
     const lineFull = value.slice(lineStart, lineEnd);
     const cursorInLine = cursor - lineStart;
-    const pipeIndex = lineFull.indexOf("|");
-    if (pipeIndex >= 0 && cursorInLine > pipeIndex) return null;
+    const firstPipeIndex = lineFull.indexOf("|");
+    const secondPipeIndex = firstPipeIndex >= 0 ? lineFull.indexOf("|", firstPipeIndex + 1) : -1;
+
+    if (firstPipeIndex >= 0 && cursorInLine > firstPipeIndex) {
+        if (secondPipeIndex >= 0 && cursorInLine > secondPipeIndex) return null;
+
+        const typedAction = esc(lineFull.slice(firstPipeIndex + 1, cursorInLine));
+        if (!typedAction) return null;
+
+        return {
+            lineStart,
+            lineEnd,
+            cursor,
+            mode: "structured-action",
+            typedIdentifier: typedAction,
+        };
+    }
 
     const prefix = value.slice(lineStart, cursor);
-    const match = prefix.match(/^\s*([A-Za-z]{1,3})\s*:\s*([^|\n]*)$/);
-    if (!match) return null;
-
-    const codigo = match[1].toUpperCase();
-    if (!TELEGRAPHIC_SPEAKER_CODES.has(codigo)) return null;
+    const parsedContext = parseLegacyTelegraphicAutocompleteContext(prefix)
+        || parseStructuredTelegraphicAutocompleteContext(prefix);
+    if (!parsedContext) return null;
 
     return {
         lineStart,
         lineEnd,
         cursor,
-        codigo,
-        typedIdentifier: esc(match[2]),
+        ...parsedContext,
     };
 }
 
 function getAutocompleteIdentifierSuggestions(typedIdentifier) {
     const query = safeLower(typedIdentifier);
-    if (query.length < 3) return [];
+    if (query.length < TELEGRAPHIC_AUTOCOMPLETE_MIN_LENGTH) return [];
     const tokenPattern = query ? new RegExp(`(^|\\s)${escapeRegExp(query)}`, "i") : null;
     return getMemberIdentifierEntries()
         .filter((item) => {
@@ -888,7 +1129,46 @@ function getAutocompleteIdentifierSuggestions(typedIdentifier) {
             if (aStarts !== bStarts) return aStarts - bStarts;
             return a.identificador.localeCompare(b.identificador, "pt-BR", { sensitivity: "base" });
         })
-        .slice(0, 6);
+        .slice(0, 6)
+        .map((item) => ({
+            value: item.identificador,
+            primary: item.identificador,
+            secondary: item.nome,
+        }));
+}
+
+function getAutocompleteSpecialLineSuggestions(typedText) {
+    const query = normalizeTelegraphicLabel(typedText);
+    if (query.length < TELEGRAPHIC_AUTOCOMPLETE_MIN_LENGTH) return [];
+    return TELEGRAPHIC_SPECIAL_LINE_SUGGESTIONS
+        .filter((item) => normalizeTelegraphicLabel(item.value).startsWith(query))
+        .map((item) => ({
+            value: item.value,
+            primary: item.value,
+            secondary: item.description,
+        }));
+}
+
+function getAutocompleteActionSuggestions(typedText) {
+    const query = normalizeTelegraphicLabel(typedText);
+    if (query.length < TELEGRAPHIC_AUTOCOMPLETE_MIN_LENGTH) return [];
+    return TELEGRAPHIC_ACTION_SUGGESTIONS
+        .filter((item) => normalizeTelegraphicLabel(item.value).startsWith(query))
+        .map((item) => ({
+            value: item.value,
+            primary: item.value,
+            secondary: item.description,
+        }));
+}
+
+function getTelegraphicAutocompleteSuggestions(context) {
+    if (!context) return [];
+    if (context.mode === "legacy") return getAutocompleteIdentifierSuggestions(context.typedIdentifier);
+    if (context.mode === "structured-action") return getAutocompleteActionSuggestions(context.typedIdentifier);
+    return [
+        ...getAutocompleteIdentifierSuggestions(context.typedIdentifier),
+        ...getAutocompleteSpecialLineSuggestions(context.typedIdentifier),
+    ].slice(0, 8);
 }
 
 function renderTelegraphicAutocomplete(textarea, container) {
@@ -901,7 +1181,7 @@ function renderTelegraphicAutocomplete(textarea, container) {
         return [];
     }
 
-    const suggestions = getAutocompleteIdentifierSuggestions(context.typedIdentifier);
+    const suggestions = getTelegraphicAutocompleteSuggestions(context);
     if (!suggestions.length) {
         container.hidden = true;
         container.innerHTML = "";
@@ -911,8 +1191,8 @@ function renderTelegraphicAutocomplete(textarea, container) {
     container.hidden = false;
     container.innerHTML = suggestions.map((item, index) => `
         <button type="button" class="autocomplete-option" data-index="${index}">
-            <strong>${escapeHtml(item.identificador)}</strong>
-            <span>${escapeHtml(item.nome)}</span>
+            <strong>${escapeHtml(item.primary)}</strong>
+            <span>${escapeHtml(item.secondary || "")}</span>
         </button>
     `).join("");
     return suggestions;
@@ -927,12 +1207,37 @@ function aplicarSugestaoIdentificador(textarea, suggestion) {
     const afterLine = value.slice(context.lineEnd);
     const linhaAtual = value.slice(context.lineStart, context.lineEnd);
     const pipeIndex = linhaAtual.indexOf("|");
-    const existingContent = pipeIndex >= 0 ? esc(linhaAtual.slice(pipeIndex + 1)) : "";
-    const prefix = `${context.codigo}: ${suggestion.identificador} | `;
-    const novaLinha = existingContent ? `${prefix}${existingContent}` : prefix;
 
+    if (context.mode === "legacy") {
+        const existingContent = pipeIndex >= 0 ? esc(linhaAtual.slice(pipeIndex + 1)) : "";
+        const prefix = `${context.codigo}: ${suggestion.value} | `;
+        const novaLinha = existingContent ? `${prefix}${existingContent}` : prefix;
+
+        textarea.value = `${before}${novaLinha}${afterLine}`;
+        const nextCursor = before.length + prefix.length;
+        textarea.setSelectionRange(nextCursor, nextCursor);
+        return true;
+    }
+
+    if (context.mode === "structured-action") {
+        const firstPipe = linhaAtual.indexOf("|");
+        if (firstPipe < 0) return false;
+
+        const secondPipe = linhaAtual.indexOf("|", firstPipe + 1);
+        const speaker = esc(linhaAtual.slice(0, firstPipe));
+        const suffix = secondPipe >= 0 ? linhaAtual.slice(secondPipe) : " | ";
+        const novaLinha = `${speaker} | ${suggestion.value}${suffix}`;
+
+        textarea.value = `${before}${novaLinha}${afterLine}`;
+        const nextCursor = before.length + (secondPipe >= 0 ? `${speaker} | ${suggestion.value}`.length : novaLinha.length);
+        textarea.setSelectionRange(nextCursor, nextCursor);
+        return true;
+    }
+
+    const suffix = pipeIndex >= 0 ? linhaAtual.slice(pipeIndex) : " | ";
+    const novaLinha = `${suggestion.value}${suffix}`;
     textarea.value = `${before}${novaLinha}${afterLine}`;
-    const nextCursor = before.length + prefix.length;
+    const nextCursor = before.length + (pipeIndex >= 0 ? suggestion.value.length : novaLinha.length);
     textarea.setSelectionRange(nextCursor, nextCursor);
     return true;
 }
@@ -1221,12 +1526,31 @@ function splitSpeakerAndContent(texto) {
     };
 }
 
-function formatarLinhaTelegráficaParaAta(linha, tipo) {
-    const match = linha.match(/^([A-Za-z]{1,3})\s*:\s*(.+)$/);
-    if (!match) return linha;
+function parseStructuredTelegraphicLine(linha) {
+    const parts = String(linha ?? "").split("|").map((part) => esc(part));
+    if (parts.length < 2) return null;
 
-    const codigo = match[1].toUpperCase();
-    const conteudo = esc(match[2]);
+    const [first, second, ...rest] = parts;
+    if (!first) return null;
+
+    const normalizedLabel = normalizeTelegraphicLabel(first);
+    if (TELEGRAPHIC_SPECIAL_LINE_LABELS.has(normalizedLabel)) {
+        return {
+            kind: "special",
+            key: normalizedLabel,
+            content: [second, ...rest].filter(Boolean).join(" | "),
+        };
+    }
+
+    return {
+        kind: "speaker",
+        reference: first,
+        action: second,
+        content: rest.filter(Boolean).join(" | "),
+    };
+}
+
+function formatLegacyTelegraphicLine(codigo, conteudo, tipo) {
     const { speaker, content } = splitSpeakerAndContent(conteudo);
     const speakerName = resolverNomeCompletoPorReferencia(speaker);
 
@@ -1247,6 +1571,42 @@ function formatarLinhaTelegráficaParaAta(linha, tipo) {
         if (codigo === "R") return `responsável: ${conteudo}`;
         if (codigo === "P") return `prazo: ${conteudo}`;
     }
+
+    return conteudo;
+}
+
+function formatStructuredTelegraphicLine(parsedLine) {
+    if (!parsedLine) return "";
+
+    if (parsedLine.kind === "special") {
+        const content = esc(parsedLine.content);
+        if (!content) return "";
+        if (parsedLine.key === "encaminhamento") return `encaminhamento: ${content}`;
+        if (parsedLine.key === "responsavel") return `responsável: ${content}`;
+        if (parsedLine.key === "prazo") return `prazo: ${content}`;
+        if (parsedLine.key === "votacao") return `votação: ${content}`;
+        if (parsedLine.key === "resultado") return `resultado: ${content}`;
+        return `deliberação: ${content}`;
+    }
+
+    const speakerName = resolverNomeCompletoPorReferencia(parsedLine.reference);
+    const action = esc(parsedLine.action);
+    const content = esc(parsedLine.content);
+
+    if (action && content) return `${speakerName} ${action} ${content}`;
+    if (action) return `registrou-se manifestação de ${speakerName}: ${action}`;
+    if (content) return `registrou-se manifestação de ${speakerName}: ${content}`;
+    return speakerName;
+}
+
+function formatarLinhaTelegráficaParaAta(linha, tipo) {
+    const match = linha.match(/^([A-Za-z]{1,3})\s*:\s*(.+)$/);
+    if (match) {
+        return formatLegacyTelegraphicLine(match[1].toUpperCase(), esc(match[2]), tipo);
+    }
+
+    const parsedLine = parseStructuredTelegraphicLine(linha);
+    if (parsedLine) return formatStructuredTelegraphicLine(parsedLine);
 
     return linha;
 }
@@ -1289,13 +1649,14 @@ function gerarPromptIAAta() {
         `Use o DOCX anexado como documento-base desta ${tipo} do ${colegiado}.`,
         "",
         "Objetivo:",
-        "- transformar os tópicos telegráficos abaixo em texto institucional claro, coeso e conciso;",
+        "- transformar os registros telegráficos abaixo em texto institucional claro, coeso e conciso;",
         "- preservar fielmente o conteúdo factual da reunião;",
         "- aproveitar os nomes completos e o contexto institucional que já constam no DOCX.",
         "",
         "Regras obrigatórias:",
         "- Não invente fatos, falas, deliberações, votações, responsáveis ou prazos.",
-        "- Considere que os identificadores curtos dos docentes correspondem aos nomes completos presentes no DOCX e na lista de presença.",
+        "- Leia cada linha, em regra, como Nome | tipo de fala | conteúdo essencial. Linhas iniciadas por Decisão, Votação, Encaminhamento, Responsável, Prazo ou Resultado representam o fechamento do tema.",
+        "- Considere que os identificadores ou nomes abreviados dos participantes correspondem aos nomes completos presentes no DOCX e na lista de presença.",
         "- Na primeira menção de cada docente, use o nome completo.",
         "- Nas menções seguintes, use Prof. ou Profa. + primeiro nome + sobrenome.",
         "- Preserve a ordem das falas quando isso ajudar a manter o sentido da discussão.",

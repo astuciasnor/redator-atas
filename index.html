@@ -234,15 +234,15 @@
                                                 </h2>
                                                 <div class="inline-help-popup" id="tooltipPautas" role="tooltip">
                                                     <strong>Dica de escrita</strong>
-                                                    <p>Escreva em linhas curtas. Use o identificador escolhido na lista de presença e feche cada pauta com deliberação e encaminhamento.</p>
+                                                    <p>Registre uma linha por intervenção, na ordem em que ocorreu. Prefira Nome | tipo de fala | conteúdo essencial e feche cada pauta com decisão, encaminhamento, responsável e prazo, quando houver.</p>
                                                     <ul class="plain-list compact-list">
-                                                        <li><strong>F:</strong> fala principal do professor.</li>
-                                                        <li><strong>A:</strong> adendo ou complemento de outra fala.</li>
-                                                        <li><strong>D / V / E:</strong> deliberação, votação e encaminhamento.</li>
+                                                        <li><strong>Nome | tipo de fala | conteúdo essencial:</strong> núcleo de cada intervenção.</li>
+                                                        <li><strong>Decisão / Votação / Encaminhamento:</strong> fechamento do tema.</li>
+                                                        <li><strong>Responsável / Prazo:</strong> use somente quando houver.</li>
                                                     </ul>
                                                 </div>
                                             </div>
-                                            <p>Título acima e texto telegráfico logo abaixo.</p>
+                                            <p>Título acima e, abaixo, as linhas telegráficas na ordem das falas.</p>
                                         </div>
                                         <div class="toolbar-inline telegraphic-toolbar">
                                             <button id="btnExportarPautasTXT" class="btn" type="button">📝 Texto .txt</button>
@@ -269,7 +269,7 @@
                                     <div class="cardhead-inline cardhead-inline--top">
                                         <div>
                                             <h2>Informes</h2>
-                                            <p>Título acima e registro telegráfico logo abaixo.</p>
+                                            <p>Título acima e, abaixo, as linhas telegráficas no formato Nome | tipo de fala | conteúdo essencial.</p>
                                         </div>
                                         <div class="toolbar-inline telegraphic-toolbar">
                                             <button id="btnExportarInformesTXT" class="btn" type="button">📝 Texto .txt</button>
@@ -294,6 +294,12 @@
                             <div class="card">
                                 <h2>Transcrição de áudio</h2>
                                 <p>Cole aqui a transcrição bruta da reunião. Ela serve como apoio de redação e não entra automaticamente no texto final da ata.</p>
+                                <div class="tools">
+                                    <button id="btnIniciarDitado" class="btn primary" type="button">🎤 Iniciar ditado</button>
+                                    <button id="btnPararDitado" class="btn" type="button" disabled>⏹️ Parar</button>
+                                    <span id="statusTranscricaoFala" class="pill">Preparando ditado...</span>
+                                </div>
+                                <p class="helper">Funciona melhor no Edge ou Chrome, com permissão de microfone liberada.</p>
                                 <textarea id="transcricaoAudio" class="output guardar" style="min-height: 440px;"
                                     placeholder="Cole aqui a transcrição do áudio ou anotações literais da reunião..."></textarea>
                             </div>
@@ -373,7 +379,7 @@
                                 <div class="cardhead-inline cardhead-inline--top">
                                     <div>
                                         <h3>Prompt para IA</h3>
-                                        <p>Copie este texto, anexe o DOCX gerado e envie ambos à IA. O prompt já explica como ler os tópicos telegráficos das pautas e dos informes.</p>
+                                        <p>Copie este texto, anexe o DOCX gerado e envie ambos à IA. O prompt já explica como ler a ordem das falas e os registros telegráficos de pautas e informes.</p>
                                     </div>
                                 </div>
                                 <textarea id="saidaPromptIA" class="output output-compact" readonly
