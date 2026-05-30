@@ -172,6 +172,23 @@ const TELEGRAPHIC_ACTION_SUGGESTIONS = [
     { value: "justificou", description: "apresentou motivo ou fundamento" },
     { value: "encaminhou", description: "formalizou proposta" },
 ];
+const INFORME_AGENDA_KEYWORDS = [
+    "pauta futura",
+    "incluir em pauta",
+    "inclusao em pauta",
+    "proximo mes",
+    "mes que vem",
+    "proxima sessao",
+    "ordem do dia",
+];
+const INFORME_ACTION_KEYWORDS = [
+    "acao prevista",
+    "levantamento",
+    "levantar",
+    "providenciar",
+    "mapear",
+    "agendar",
+];
 
 document.addEventListener("DOMContentLoaded", async () => {
     setupTabs();
@@ -330,7 +347,10 @@ function setupGlobalListeners() {
         on(id, "change", salvarEstado);
     });
 
-    on("transcricaoAudio", "input", salvarEstado);
+    on("transcricaoAudio", "input", () => {
+        renderPromptIA();
+        salvarEstado();
+    });
     on("saidaEmail", "input", salvarEstado);
     on("saidaAssuntoEmail", "input", salvarEstado);
 
@@ -1599,19 +1619,183 @@ function formatStructuredTelegraphicLine(parsedLine) {
     return speakerName;
 }
 
-function formatarLinhaTelegráficaParaAta(linha, tipo) {
-    const match = linha.match(/^([A-Za-z]{1,3})\s*:\s*(.+)$/);
+function parseTelegraphicLineForAta(linha) {
+    const match = String(linha ?? "").match(/^([A-Za-z]{1,3})\s*:\s*(.+)$/);
     if (match) {
-        return formatLegacyTelegraphicLine(match[1].toUpperCase(), esc(match[2]), tipo);
+        return {
+            mode: "legacy",
+            code: match[1].toUpperCase(),
+            content: esc(match[2]),
+        };
     }
 
     const parsedLine = parseStructuredTelegraphicLine(linha);
-    if (parsedLine) return formatStructuredTelegraphicLine(parsedLine);
+    if (parsedLine) {
+        return {
+            mode: "structured",
+            parsedLine,
+        };
+    }
 
-    return linha;
+    return {
+        mode: "plain",
+        content: esc(linha),
+    };
+}
+
+function normalizeKeywordSearchText(text) {
+    return normalizeTelegraphicLabel(text)
+        .replace(/[^a-z0-9\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function detectInformeFollowUpSignals(text) {
+    const normalized = normalizeKeywordSearchText(text);
+    return {
+        hasAgenda: INFORME_AGENDA_KEYWORDS.some((keyword) => normalized.includes(keyword)),
+        hasAction: INFORME_ACTION_KEYWORDS.some((keyword) => normalized.includes(keyword)),
+    };
+}
+
+function buildInformeAgendaPhrase(text) {
+    const normalized = normalizeKeywordSearchText(text);
+    if (normalized.includes("ordem do dia") || normalized.includes("proxima sessao")) {
+        return "encaminhado para a ordem do dia da próxima sessão";
+    }
+    if (normalized.includes("proximo mes") || normalized.includes("mes que vem")) {
+        return "gerando o encaminhamento de inclusão do tema na pauta do próximo mês";
+    }
+    return "gerando o encaminhamento de inclusão em pauta futura";
+}
+
+function buildInformeActionPhrase(text) {
+    const normalized = normalizeKeywordSearchText(text);
+    const hasLevantamento = normalized.includes("levantamento") || normalized.includes("levantar");
+    const hasTecnico = normalized.includes("tecnico");
+    const hasOrcamentario = normalized.includes("orcament");
+    const hasDados = normalized.includes("dados");
+
+    if (hasLevantamento && hasTecnico && hasOrcamentario) {
+        return "gerando a ação prevista de realizar levantamento técnico/orçamentário";
+    }
+    if (hasLevantamento && hasTecnico) {
+        return "gerando a ação prevista de realizar levantamento técnico";
+    }
+    if (hasLevantamento && hasOrcamentario) {
+        return "gerando a ação prevista de realizar levantamento orçamentário";
+    }
+    if (hasLevantamento && hasDados) {
+        return "gerando a ação prevista de realizar levantamento de dados";
+    }
+    if (hasLevantamento) {
+        return "gerando a ação prevista de realizar levantamento";
+    }
+    if (normalized.includes("providenciar")) {
+        return "gerando a ação prevista de providenciar as medidas necessárias";
+    }
+    if (normalized.includes("mapear")) {
+        return "gerando a ação prevista de mapear a situação relatada";
+    }
+    if (normalized.includes("agendar")) {
+        return "gerando a ação prevista de agendar a providência necessária";
+    }
+    return "gerando a ação prevista de adotar as providências cabíveis";
+}
+
+function buildInformeFollowUpSuffix(text) {
+    const signals = detectInformeFollowUpSignals(text);
+    const parts = [];
+    if (signals.hasAgenda) parts.push(buildInformeAgendaPhrase(text));
+    if (signals.hasAction) parts.push(buildInformeActionPhrase(text));
+    return parts.length ? `, ${parts.join(" e ")}` : "";
+}
+
+function formatInformeSpecialLine(key, content) {
+    const text = esc(content);
+    if (!text) return "";
+
+    if (key === "encaminhamento") {
+        const signals = detectInformeFollowUpSignals(text);
+        if (signals.hasAgenda) return buildInformeAgendaPhrase(text);
+        if (signals.hasAction) return buildInformeActionPhrase(text);
+        return `ficou registrado o encaminhamento para ${text}`;
+    }
+    if (key === "responsavel") return `ficando indicado ${text} como responsável pelo acompanhamento`;
+    if (key === "prazo") return `com retorno previsto ${text}`;
+    if (key === "resultado") return `registrou-se como resultado do informe: ${text}`;
+    if (key === "votacao") return `sem caráter de votação, registrou-se apenas ${text}`;
+    return `ficou registrado, sem caráter deliberativo, ${text}`;
+}
+
+function analisarTextoInformeParaAta(texto) {
+    const linhas = splitTelegraphicLines(texto);
+    if (!linhas.length) return { text: "", hasFollowUp: false };
+
+    const parsedLines = linhas.map((linha) => ({ raw: linha, parsed: parseTelegraphicLineForAta(linha) }));
+    const hasExplicitFollowUp = parsedLines.some(({ parsed }) => {
+        if (parsed.mode === "legacy") return ["E", "R", "P"].includes(parsed.code);
+        return parsed.mode === "structured"
+            && parsed.parsedLine.kind === "special"
+            && ["encaminhamento", "responsavel", "prazo"].includes(parsed.parsedLine.key);
+    });
+
+    let hasFollowUp = false;
+
+    const parts = parsedLines.map(({ raw, parsed }) => {
+        if (parsed.mode === "legacy") {
+            if (["E", "R", "P"].includes(parsed.code)) {
+                hasFollowUp = true;
+                const specialKey = parsed.code === "E" ? "encaminhamento" : parsed.code === "R" ? "responsavel" : "prazo";
+                return formatInformeSpecialLine(specialKey, parsed.content);
+            }
+
+            const base = formatLegacyTelegraphicLine(parsed.code, parsed.content, "informe");
+            if (hasExplicitFollowUp) return base;
+
+            const suffix = buildInformeFollowUpSuffix(`${raw} ${parsed.content}`);
+            if (suffix) hasFollowUp = true;
+            return `${base}${suffix}`;
+        }
+
+        if (parsed.mode === "structured") {
+            if (parsed.parsedLine.kind === "special") {
+                const text = formatInformeSpecialLine(parsed.parsedLine.key, parsed.parsedLine.content);
+                if (["encaminhamento", "responsavel", "prazo"].includes(parsed.parsedLine.key)) hasFollowUp = true;
+                return text;
+            }
+
+            const base = formatStructuredTelegraphicLine(parsed.parsedLine);
+            if (hasExplicitFollowUp) return base;
+
+            const sourceText = `${parsed.parsedLine.action} ${parsed.parsedLine.content}`;
+            const suffix = buildInformeFollowUpSuffix(sourceText || raw);
+            if (suffix) hasFollowUp = true;
+            return `${base}${suffix}`;
+        }
+
+        const suffix = hasExplicitFollowUp ? "" : buildInformeFollowUpSuffix(raw);
+        if (suffix) hasFollowUp = true;
+        return `${parsed.content}${suffix}`;
+    }).filter(Boolean);
+
+    return {
+        text: parts.join("; "),
+        hasFollowUp,
+    };
+}
+
+function formatarLinhaTelegráficaParaAta(linha, tipo) {
+    const parsed = parseTelegraphicLineForAta(linha);
+    if (parsed.mode === "legacy") {
+        return formatLegacyTelegraphicLine(parsed.code, parsed.content, tipo);
+    }
+    if (parsed.mode === "structured") return formatStructuredTelegraphicLine(parsed.parsedLine);
+    return parsed.content;
 }
 
 function formatarTextoTelegraficoParaAta(texto, tipo) {
+    if (tipo === "informe") return analisarTextoInformeParaAta(texto).text;
     const linhas = splitTelegraphicLines(texto);
     if (!linhas.length) return "";
     return linhas
@@ -1637,6 +1821,12 @@ function buildPromptSectionIA(section) {
     return `${label}:\n${blocos.join("\n\n")}`;
 }
 
+function buildPromptTranscricaoIA() {
+    const texto = String(byId("transcricaoAudio")?.value ?? "").trim();
+    if (!texto) return "Transcrição / resumo do áudio:\n- Nenhum texto informado na aba Transcrição.";
+    return `Transcrição / resumo do áudio (apoio factual complementar):\n${texto}`;
+}
+
 function gerarPromptIAAta() {
     const tipo = getTipoReuniaoAta();
     const colegiado = getColegiadoAta();
@@ -1656,12 +1846,18 @@ function gerarPromptIAAta() {
         "Regras obrigatórias:",
         "- Não invente fatos, falas, deliberações, votações, responsáveis ou prazos.",
         "- Leia cada linha, em regra, como Nome | tipo de fala | conteúdo essencial. Linhas iniciadas por Decisão, Votação, Encaminhamento, Responsável, Prazo ou Resultado representam o fechamento do tema.",
+        "- Se houver texto na aba Transcrição, trate-o como apoio factual complementar. Esse texto pode ser transcrição bruta ou resumo gerado por IA a partir do áudio.",
         "- Considere que os identificadores ou nomes abreviados dos participantes correspondem aos nomes completos presentes no DOCX e na lista de presença.",
         "- Na primeira menção de cada docente, use o nome completo.",
         "- Nas menções seguintes, use Prof. ou Profa. + primeiro nome + sobrenome.",
         "- Preserve a ordem das falas quando isso ajudar a manter o sentido da discussão.",
         "- Se não houver votação, não invente votação.",
         "- Se não houver responsável ou prazo, não acrescente.",
+        "- Nos informes, quando houver desdobramento futuro, registre-o como encaminhamento ou ação prevista, sem atribuir caráter deliberativo ou de votação.",
+        "- Nos informes, sinais como encaminhamento, ação prevista, levantamento, providenciar, mapear, agendar e incluir em pauta futura indicam providências a serem registradas.",
+        "- Para informes com tema a retornar em sessão futura, use formulações como encaminhado para a ordem do dia da próxima sessão ou gerando o encaminhamento de inclusão na pauta do próximo mês.",
+        "- Para informes com providência prática, use formulações como gerando a ação prevista de, com o compromisso de realizar levantamento técnico/orçamentário, ou registrando a necessidade de providências subsequentes.",
+        "- Em caso de divergência, preserve o que estiver mais consistente com o DOCX e com as deliberações e encaminhamentos explícitos das pautas e informes.",
         "- Converta os tópicos em linguagem acadêmica e administrativa, com boa fluidez e sem excesso de repetição.",
         "",
         "Identificação rápida da reunião:",
@@ -1675,6 +1871,8 @@ function gerarPromptIAAta() {
         buildPromptSectionIA("pautas"),
         "",
         buildPromptSectionIA("informes"),
+        "",
+        buildPromptTranscricaoIA(),
     ].join("\n");
 }
 
@@ -1839,12 +2037,25 @@ function gerarAtaInstitucional(isResumida) {
     }
 
     if (informes.length > 0) {
-        const corpoInformes = informes.map((item) => {
-            const textoInforme = formatarTextoTelegraficoParaAta(item.text, "informe");
-            if (isResumida || !textoInforme) return finalizarFrase(item.title);
+        const analisesInformes = informes.map((item) => ({
+            title: item.title,
+            analysis: analisarTextoInformeParaAta(item.text),
+        }));
+        const corpoInformes = analisesInformes.map((item) => {
+            const textoInforme = item.analysis.text;
+            if (isResumida) {
+                if (item.analysis.hasFollowUp) {
+                    return finalizarFrase(`${item.title}, com registro de encaminhamentos e ações previstas decorrentes do informe`);
+                }
+                return finalizarFrase(item.title);
+            }
+            if (!textoInforme) return finalizarFrase(item.title);
             return finalizarFrase(`${item.title}: ${textoInforme}`);
         }).join(" ");
         paragraphs.push(`Nos informes, registrou-se o seguinte: ${corpoInformes}`);
+        if (analisesInformes.some((item) => item.analysis.hasFollowUp)) {
+            paragraphs.push("Os desdobramentos consignados nos informes foram registrados como encaminhamentos e ações previstas para acompanhamento, sem caráter deliberativo ou de votação.");
+        }
     }
 
     if (pautas.length > 0) {
@@ -2301,6 +2512,41 @@ function inferImageType(src) {
     return "png";
 }
 
+function getPptxGenConstructor() {
+    const scope = typeof globalThis !== "undefined" ? globalThis : window;
+    if (typeof scope.PptxGenJS === "function") return scope.PptxGenJS;
+    if (typeof scope.pptxgen === "function") return scope.pptxgen;
+    return null;
+}
+
+async function normalizarImagemParaDataUrl(src) {
+    const source = esc(src);
+    if (!source) return "";
+    if (source.startsWith("data:")) return source;
+
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+            const width = image.naturalWidth || image.width;
+            const height = image.naturalHeight || image.height;
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+
+            if (!context || !width || !height) {
+                reject(new Error("Não foi possível preparar a imagem para a apresentação."));
+                return;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            context.drawImage(image, 0, 0, width, height);
+            resolve(canvas.toDataURL("image/png"));
+        };
+        image.onerror = () => reject(new Error(`Não foi possível carregar a imagem ${source}.`));
+        image.src = source;
+    });
+}
+
 function criarTextRunsDOCX(DOCX, text) {
     const lines = String(text).split("\n");
     const runs = [];
@@ -2373,20 +2619,28 @@ async function exportarPPTX() {
 }
 
 async function gerarArquivoPPTX() {
-    if (typeof pptxgen === "undefined") {
-        throw new Error("pptxgen não disponível");
+    const PptxGenCtor = getPptxGenConstructor();
+    if (!PptxGenCtor) {
+        throw new Error("PptxGenJS não disponível");
     }
 
-    const pres = new pptxgen();
+    const pres = new PptxGenCtor();
     pres.layout = "LAYOUT_16x9";
 
     const tipo = esc(byId("tipoReuniao")?.value) || "Reunião Ordinária";
     const data = formatDateBR(byId("dataReuniao")?.value);
+    const logoFepesca = await normalizarImagemParaDataUrl(logos.fepesca).catch((error) => {
+        console.warn(error);
+        return "";
+    });
 
     const slideCapa = pres.addSlide();
     slideCapa.background = { color: "0F172A" };
-    slideCapa.addText(tipo.toUpperCase(), { x: 1, y: 2.2, w: 8, h: 1, fontSize: 32, bold: true, color: "FFFFFF", align: "center", fontFace: "Segoe UI" });
-    slideCapa.addText(`DATA: ${data}`, { x: 1, y: 3.2, w: 8, h: 1, fontSize: 18, color: "94A3B8", align: "center", fontFace: "Segoe UI" });
+    if (logoFepesca) {
+        slideCapa.addImage({ data: logoFepesca, x: 3.75, y: 0.45, w: 2.5, h: 2.5 });
+    }
+    slideCapa.addText(tipo.toUpperCase(), { x: 1, y: 3.05, w: 8, h: 1, fontSize: 32, bold: true, color: "FFFFFF", align: "center", fontFace: "Segoe UI" });
+    slideCapa.addText(`DATA: ${data}`, { x: 1, y: 3.95, w: 8, h: 1, fontSize: 18, color: "94A3B8", align: "center", fontFace: "Segoe UI" });
 
     if (pautas.length > 0) {
         const titleSlide = pres.addSlide();
@@ -2425,8 +2679,10 @@ function montarArraySlides() {
     browserSlides = [];
     const tipo = esc(byId("tipoReuniao")?.value) || "Reunião";
     const data = formatDateBR(byId("dataReuniao")?.value);
+    const logoFepesca = esc(logos.fepesca);
 
     browserSlides.push(`
+        ${logoFepesca ? `<img src="${escapeHtml(logoFepesca)}" alt="Logo da FEPESCA" style="width: 220px; height: 220px; object-fit: contain; margin-bottom: 24px; filter: drop-shadow(0 18px 36px rgba(15, 23, 42, 0.45));">` : ""}
         <h1 style="font-size: 58px; margin-bottom: 20px; color: #fff;">${escapeHtml(tipo.toUpperCase())}</h1>
         <h3 style="font-size: 28px; color: #94a3b8; font-weight: normal;">${escapeHtml(data)}</h3>
     `);
