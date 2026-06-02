@@ -10,7 +10,7 @@ const jsonMembrosPadrao = [
   { nome: "Grazielle Fernanda Evangelista Gomes", funcao: "Profa. Dra." },
   { nome: "Hudson Cleber Pereira da Silva", funcao: "Prof. Dr." },
   { nome: "Ivan Lucas Fernandes Matos", funcao: "Representante Discente" },
-  { nome: "Ana Luiza Borges Guedes", funcao: "Representante Discente" },
+  { nome: "Angelo Renato Silva Tavares", funcao: "Representante Discente" },
   { nome: "Leonnan Carlos Carvalho de Oliveira", funcao: "Prof. Dr." },
   { nome: "Lorena Batista de Moura", funcao: "Profa. Dra." },
   { nome: "Marcos Ferreira Brabo", funcao: "Prof. Dr." },

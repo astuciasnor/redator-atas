@@ -19,7 +19,7 @@ const MEMBER_RENAMES = {
 const REQUIRED_MEMBERS = [
     { nome: "Nils Edvin Asp Neto", funcao: "Prof. Dr." },
     { nome: "Rafael Anaisce das Chagas", funcao: "Prof. Dr." },
-    { nome: "Ana Luiza Borges Guedes", funcao: "Representante Discente" },
+    { nome: "Angelo Renato Silva Tavares", funcao: "Representante Discente" },
     { nome: "Breno Portilho de Sousa Maia", funcao: "Representante dos Técnicos" },
 ];
 

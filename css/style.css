@@ -818,6 +818,12 @@ textarea.output:focus,
   color: #fff;
 }
 
+.btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  background: var(--soft);
+}
+
 .btn.primary:hover {
   filter: brightness(1.04);
 }
