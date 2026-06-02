@@ -27,6 +27,10 @@ const byId = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").trim();
 const sortAlphaPT = (arr) => arr.sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
 const safeLower = (value) => esc(value).toLowerCase();
+const REMOVED_MEMBER_NAMES = new Set([
+    "ana luiza borges guedes",
+]);
+const isRemovedMemberName = (nome) => REMOVED_MEMBER_NAMES.has(safeLower(nome));
 const NAME_CONNECTORS = new Set(["de", "da", "do", "das", "dos", "e"]);
 const FAMILY_SUFFIXES = new Set(["filho", "junior", "júnior", "neto", "sobrinho"]);
 const escapeHtml = (value) => String(value ?? "")
@@ -931,6 +935,10 @@ function renderTabelaMembros() {
         btnEditar.addEventListener("click", () => {
             const novoNome = prompt("Editar nome do participante:", membro.nome);
             if (novoNome === null || !esc(novoNome)) return;
+            if (isRemovedMemberName(novoNome)) {
+                alert("Este participante foi removido da lista de presença.");
+                return;
+            }
             const novaFuncao = prompt("Editar função do participante:", membro.funcao || "—");
             if (novaFuncao === null) return;
             membro.nome = esc(novoNome);
@@ -983,6 +991,10 @@ function addNovoMembro() {
     const nome = esc(byId("novoNome")?.value);
     const funcao = esc(byId("novaFuncao")?.value) || "—";
     if (!nome) return;
+    if (isRemovedMemberName(nome)) {
+        alert("Este participante foi removido da lista de presença.");
+        return;
+    }
 
     const existe = [...membrosOriginais, ...membrosExtras]
         .some((membro) => membro.nome.toLowerCase() === nome.toLowerCase());
@@ -1969,6 +1981,7 @@ function normalizarMembrosBase(lista) {
 
     (Array.isArray(lista) ? lista : []).forEach((membro) => {
         const normalizado = normalizarMembro(membro);
+        if (!normalizado.nome || isRemovedMemberName(normalizado.nome)) return;
         const chave = safeLower(normalizado.nome);
         if (!chave || vistos.has(chave)) return;
         vistos.add(chave);
@@ -2842,7 +2855,8 @@ function restaurarEstado() {
             fepesca: state.logos?.fepesca || DEFAULT_LOGOS.fepesca,
         };
         membrosOriginais = normalizarMembrosBase(Array.isArray(state.membrosOriginais) ? state.membrosOriginais : membrosOriginais);
-        membrosExtras = Array.isArray(state.membrosExtras) ? state.membrosExtras : [];
+        membrosExtras = normalizarMembrosBase(Array.isArray(state.membrosExtras) ? state.membrosExtras : [])
+            .filter((membroExtra) => !membrosOriginais.some((membroBase) => safeLower(membroBase.nome) === safeLower(membroExtra.nome)));
         pautas = Array.isArray(state.pautas) ? state.pautas : [];
         informes = Array.isArray(state.informes) ? state.informes : [];
 
