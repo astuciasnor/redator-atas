@@ -52,9 +52,11 @@ let mergeBases = { pautas: [], informes: [] };
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 let speechRecognition = null;
 let speechRecognitionActive = false;
-let speechRecognitionStopRequested = false;
+let speechRecognitionPaused = false;
 let speechRecognitionBaseText = "";
 let speechRecognitionFinalText = "";
+let speechRecognitionSessionSpeaker = "";
+let selectedSpeechParticipant = "";
 
 const LOGO_FIELDS = [
     { key: "fepesca", inputId: "logoFepescaUpload", previewId: "logoFepescaPreview", placeholderId: "logoFepescaPlaceholder", docImgId: "docLogoFepesca", docSlotId: "docLogoFepescaSlot" },
@@ -196,6 +198,7 @@ const INFORME_ACTION_KEYWORDS = [
 
 document.addEventListener("DOMContentLoaded", async () => {
     setupTabs();
+    setupHelpSubtopics();
     setupGlobalListeners();
     setupSpeechToText();
 
@@ -216,13 +219,48 @@ function setupTabs() {
     document.querySelectorAll(".tabbtn").forEach((btn) => {
         btn.addEventListener("click", () => {
             const id = btn.dataset.tab;
-            document.querySelectorAll(".tabbtn").forEach((item) => item.classList.remove("active"));
-            document.querySelectorAll(".tabcontent").forEach((item) => item.classList.remove("active"));
-            btn.classList.add("active");
-            const tab = byId(id);
-            if (tab) tab.classList.add("active");
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            activateTab(id, { scroll: true, triggerButton: btn });
         });
+    });
+}
+
+function activateTab(id, options = {}) {
+    const { scroll = false, triggerButton = null } = options;
+    document.querySelectorAll(".tabbtn").forEach((item) => {
+        item.classList.toggle("active", item === triggerButton || item.dataset.tab === id);
+    });
+    document.querySelectorAll(".tabcontent").forEach((item) => {
+        item.classList.toggle("active", item.id === id);
+    });
+    if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function setupHelpSubtopics() {
+    const links = [...document.querySelectorAll(".help-subnav-link[data-help-target]")];
+    if (!links.length) return;
+
+    links.forEach((link) => {
+        link.addEventListener("click", (event) => {
+            event.preventDefault();
+            const targetId = link.dataset.helpTarget;
+            if (!targetId) return;
+            setActiveHelpSubtopic(targetId);
+        });
+    });
+
+    const defaultTarget = links[0]?.dataset.helpTarget;
+    if (defaultTarget) setActiveHelpSubtopic(defaultTarget);
+}
+
+function setActiveHelpSubtopic(targetId) {
+    document.querySelectorAll(".help-panel[id]").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === targetId);
+    });
+    document.querySelectorAll(".help-subnav-link[data-help-target]").forEach((link) => {
+        const isActive = link.dataset.helpTarget === targetId;
+        link.classList.toggle("active", isActive);
+        if (isActive) link.setAttribute("aria-current", "true");
+        else link.removeAttribute("aria-current");
     });
 }
 
@@ -332,6 +370,7 @@ function setupGlobalListeners() {
     on("btnSlidePrev", "click", prevSlide);
     on("btnIniciarDitado", "click", iniciarTranscricaoFala);
     on("btnPararDitado", "click", pararTranscricaoFala);
+    on("btnLimparTranscricao", "click", limparTranscricaoTexto);
 
     document.addEventListener("keydown", (event) => {
         const fs = byId("fullscreenSlides");
@@ -351,10 +390,12 @@ function setupGlobalListeners() {
         on(id, "change", salvarEstado);
     });
 
-    on("transcricaoAudio", "input", () => {
-        renderPromptIA();
-        salvarEstado();
+    on("transcricaoAudio", "input", () => syncTranscriptDerivedState());
+    on("transcricaoFalanteAtual", "input", (event) => {
+        selectedSpeechParticipant = esc(event.target.value);
     });
+    on("transcricaoFalanteAtual", "change", (event) => commitSpeechSpeakerValue(event.target));
+    on("transcricaoFalanteAtual", "blur", (event) => commitSpeechSpeakerValue(event.target));
     on("saidaEmail", "input", salvarEstado);
     on("saidaAssuntoEmail", "input", salvarEstado);
 
@@ -374,9 +415,9 @@ function setupGlobalListeners() {
 }
 
 function setupSpeechToText() {
-    updateSpeechControls("Preparando ditado...");
+    updateSpeechControls("Preparando ditado...", "connecting");
     if (!SpeechRecognitionCtor) {
-        updateSpeechControls("Ditado indisponível");
+        updateSpeechControls("Ditado indisponível", "disabled");
         const startBtn = byId("btnIniciarDitado");
         const stopBtn = byId("btnPararDitado");
         if (startBtn) startBtn.disabled = true;
@@ -392,51 +433,154 @@ function setupSpeechToText() {
 
     speechRecognition.onstart = () => {
         speechRecognitionActive = true;
-        speechRecognitionStopRequested = false;
-        updateSpeechControls("Ouvindo...", true);
+        speechRecognitionPaused = false;
+        updateSpeechControls("Ouvindo...", "listening");
     };
 
     speechRecognition.onresult = (event) => {
         let interimText = "";
+        let hasFinalResult = false;
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
             const result = event.results[index];
             const transcript = normalizeSpeechFragment(result?.[0]?.transcript);
             if (!transcript) continue;
-            if (result.isFinal) speechRecognitionFinalText = joinSpeechFragments(speechRecognitionFinalText, transcript);
+            if (result.isFinal) {
+                speechRecognitionFinalText = joinSpeechFragments(speechRecognitionFinalText, transcript);
+                hasFinalResult = true;
+            }
             else interimText = joinSpeechFragments(interimText, transcript);
         }
-        applySpeechTranscriptToField(interimText);
+        applySpeechTranscriptToField(interimText, { persist: hasFinalResult });
     };
 
     speechRecognition.onerror = (event) => {
         const errorCode = event?.error || "erro-desconhecido";
         if (errorCode !== "aborted") {
             showToast(mapSpeechRecognitionError(errorCode), "info");
+            speechRecognitionPaused = false;
         }
-        speechRecognitionStopRequested = true;
     };
 
     speechRecognition.onend = () => {
         speechRecognitionActive = false;
-        applySpeechTranscriptToField("");
-        updateSpeechControls(speechRecognitionStopRequested ? "Ditado interrompido" : "Pronto para ouvir");
-        speechRecognitionStopRequested = false;
+        applySpeechTranscriptToField("", { persist: true });
+        finalizeSpeechTranscriptField();
+        updateSpeechControls(speechRecognitionPaused ? "Ditado em pausa" : "Pronto para ouvir", speechRecognitionPaused ? "paused" : "idle");
+        speechRecognitionSessionSpeaker = "";
     };
 
-    updateSpeechControls("Pronto para ouvir");
+    updateSpeechControls("Pronto para ouvir", "idle");
 }
 
-function updateSpeechControls(statusText, isListening = false) {
+function updateSpeechControls(statusText, state = "idle") {
     const startBtn = byId("btnIniciarDitado");
     const stopBtn = byId("btnPararDitado");
     const status = byId("statusTranscricaoFala");
-    if (status) status.textContent = statusText;
-    if (startBtn) startBtn.disabled = !SpeechRecognitionCtor || isListening;
-    if (stopBtn) stopBtn.disabled = !SpeechRecognitionCtor || !isListening;
+    const isBusy = state === "listening" || state === "connecting";
+    const isPaused = state === "paused";
+    if (status) {
+        status.textContent = statusText;
+        status.dataset.state = state;
+    }
+    if (startBtn) {
+        startBtn.disabled = !SpeechRecognitionCtor || isBusy;
+        startBtn.textContent = isPaused ? "▶️ Retomar ditado" : "🎤 Iniciar ditado";
+    }
+    if (stopBtn) {
+        stopBtn.disabled = !SpeechRecognitionCtor || state !== "listening";
+        stopBtn.textContent = "⏸️ Pausar";
+    }
 }
 
 function normalizeSpeechFragment(value) {
     return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function syncTranscriptDerivedState(options = {}) {
+    const { persist = true } = options;
+    renderPromptIA();
+    if (persist) salvarEstado();
+}
+
+function finalizeSpeechText(value) {
+    const trimmed = String(value ?? "").trimEnd();
+    if (!trimmed) return "";
+
+    const trailingMatch = trimmed.match(/(["'”’)\]]+)$/u);
+    const trailing = trailingMatch ? trailingMatch[1] : "";
+    const core = trailing ? trimmed.slice(0, -trailing.length).trimEnd() : trimmed;
+    if (!core) return trimmed;
+    if (/[.!?…]$/u.test(core)) return `${core}${trailing}`;
+
+    const cleanedCore = core.replace(/[,:;\-–—]+$/u, "").trimEnd();
+    return `${cleanedCore || core}.${trailing}`;
+}
+
+function capitalizeSpeechBlock(value) {
+    const chars = Array.from(String(value ?? ""));
+    for (let index = 0; index < chars.length; index += 1) {
+        const char = chars[index];
+        if (char.toLocaleLowerCase("pt-BR") !== char.toLocaleUpperCase("pt-BR")) {
+            chars[index] = char.toLocaleUpperCase("pt-BR");
+            break;
+        }
+    }
+    return chars.join("");
+}
+
+function buildSpeechSpeakerOptionLabel(item) {
+    const baseLabel = item.identificador && safeLower(item.identificador) !== safeLower(item.nome)
+        ? `${item.identificador} — ${item.nome}`
+        : item.nome;
+    return item.funcao && item.funcao !== "—"
+        ? `${baseLabel} (${item.funcao})`
+        : baseLabel;
+}
+
+function findSpeechSpeakerEntry(rawValue) {
+    const target = safeLower(rawValue);
+    if (!target) return null;
+
+    const entries = getMemberIdentifierEntries();
+    const exact = entries.find((item) => safeLower(item.nome) === target || safeLower(item.identificador) === target);
+    if (exact) return exact;
+
+    const partial = entries.filter((item) => safeLower(item.nome).startsWith(target) || safeLower(item.identificador).startsWith(target));
+    return partial.length === 1 ? partial[0] : null;
+}
+
+function normalizeSpeechSpeakerValue(rawValue) {
+    const text = esc(rawValue);
+    if (!text) return "";
+    return findSpeechSpeakerEntry(text)?.nome || text;
+}
+
+function commitSpeechSpeakerValue(input) {
+    if (!input) return;
+    const normalized = normalizeSpeechSpeakerValue(input.value);
+    selectedSpeechParticipant = normalized;
+    input.value = normalized;
+    salvarEstado();
+}
+
+function getSelectedSpeechSpeaker() {
+    const liveValue = byId("transcricaoFalanteAtual")?.value;
+    return normalizeSpeechSpeakerValue(liveValue || selectedSpeechParticipant);
+}
+
+function buildSpeechBlockText(value, speakerName = speechRecognitionSessionSpeaker) {
+    const text = normalizeSpeechFragment(value);
+    if (!text) return "";
+    const prefix = esc(speakerName) ? `${esc(speakerName)}: ` : "";
+    return `${prefix}${capitalizeSpeechBlock(text)}`;
+}
+
+function composeSpeechTranscriptText(baseText, liveText, speakerName = speechRecognitionSessionSpeaker) {
+    const base = String(baseText ?? "").trimEnd();
+    const bloco = buildSpeechBlockText(liveText, speakerName);
+    if (!base) return bloco;
+    if (!bloco) return base;
+    return `${finalizeSpeechText(base)}\n\n${bloco}`;
 }
 
 function joinSpeechFragments(baseText, fragment) {
@@ -450,20 +594,81 @@ function joinSpeechFragments(baseText, fragment) {
 function buildSpeechTranscriptText(interimText = "") {
     const baseText = String(speechRecognitionBaseText ?? "").trimEnd();
     const liveText = joinSpeechFragments(speechRecognitionFinalText, interimText);
-    if (baseText && liveText) return `${baseText}\n${liveText}`;
-    return baseText || liveText;
+    return composeSpeechTranscriptText(baseText, liveText, speechRecognitionSessionSpeaker);
 }
 
-function applySpeechTranscriptToField(interimText = "") {
+function applySpeechTranscriptToField(interimText = "", options = {}) {
+    const { persist = false } = options;
     const textarea = byId("transcricaoAudio");
     if (!textarea) return;
     const nextValue = buildSpeechTranscriptText(interimText);
     if (textarea.value !== nextValue) {
         textarea.value = nextValue;
-        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        syncTranscriptDerivedState({ persist });
     }
     const cursor = textarea.value.length;
     textarea.setSelectionRange(cursor, cursor);
+}
+
+function finalizeSpeechTranscriptField() {
+    const textarea = byId("transcricaoAudio");
+    if (!textarea) return;
+    const finalizedValue = finalizeSpeechText(textarea.value);
+    if (textarea.value !== finalizedValue) {
+        textarea.value = finalizedValue;
+        syncTranscriptDerivedState({ persist: true });
+    }
+    const cursor = textarea.value.length;
+    textarea.setSelectionRange(cursor, cursor);
+}
+
+function limparTranscricaoTexto() {
+    const textarea = byId("transcricaoAudio");
+    if (!textarea) return;
+
+    const hasText = Boolean(esc(textarea.value) || esc(speechRecognitionBaseText) || esc(speechRecognitionFinalText));
+    if (!hasText && !speechRecognitionActive) return;
+
+    const message = speechRecognitionActive
+        ? "Limpar a transcrição atual? O ditado será interrompido e o texto será apagado."
+        : "Limpar toda a transcrição atual?";
+    if (!confirm(message)) return;
+
+    speechRecognitionBaseText = "";
+    speechRecognitionFinalText = "";
+    speechRecognitionSessionSpeaker = "";
+
+    textarea.value = "";
+    syncTranscriptDerivedState({ persist: true });
+    textarea.focus();
+    textarea.setSelectionRange(0, 0);
+
+    if (speechRecognition && speechRecognitionActive) {
+        speechRecognitionPaused = false;
+        updateSpeechControls("Encerrando e limpando transcrição...", "connecting");
+        speechRecognition.stop();
+    } else {
+        updateSpeechControls("Pronto para ouvir", SpeechRecognitionCtor ? "idle" : "disabled");
+    }
+
+    showToast("Transcrição limpa.", "success");
+}
+
+function renderSpeechSpeakerOptions() {
+    const input = byId("transcricaoFalanteAtual");
+    const datalist = byId("transcricaoFalanteSugestoes");
+    if (!input || !datalist) return;
+
+    const entries = getMemberIdentifierEntries();
+    const wantedValue = normalizeSpeechSpeakerValue(selectedSpeechParticipant || input.value);
+
+    datalist.innerHTML = entries.map((item) => {
+        const label = buildSpeechSpeakerOptionLabel(item);
+        return `<option value="${escapeHtml(item.nome)}" label="${escapeHtml(label)}"></option>`;
+    }).join("");
+
+    selectedSpeechParticipant = wantedValue;
+    input.value = wantedValue;
 }
 
 function mapSpeechRecognitionError(errorCode) {
@@ -488,24 +693,27 @@ function iniciarTranscricaoFala() {
     const textarea = byId("transcricaoAudio");
     if (!textarea) return;
 
-    speechRecognitionBaseText = String(textarea.value ?? "");
+    const wasPaused = speechRecognitionPaused;
+    speechRecognitionBaseText = String(textarea.value ?? "").trimEnd();
     speechRecognitionFinalText = "";
-    speechRecognitionStopRequested = false;
-    updateSpeechControls("Conectando microfone...");
+    speechRecognitionSessionSpeaker = getSelectedSpeechSpeaker();
+    speechRecognitionPaused = false;
+    updateSpeechControls(wasPaused ? "Retomando ditado..." : "Conectando microfone...", "connecting");
 
     try {
         speechRecognition.start();
     } catch (error) {
         console.error(error);
-        updateSpeechControls("Falha ao iniciar o ditado");
+        speechRecognitionPaused = wasPaused;
+        updateSpeechControls(wasPaused ? "Ditado em pausa" : "Falha ao iniciar o ditado", wasPaused ? "paused" : "idle");
         showToast("Não foi possível iniciar o ditado agora. Tente novamente.", "info");
     }
 }
 
 function pararTranscricaoFala() {
     if (!speechRecognition || !speechRecognitionActive) return;
-    speechRecognitionStopRequested = true;
-    updateSpeechControls("Encerrando ditado...");
+    speechRecognitionPaused = true;
+    updateSpeechControls("Pausando ditado...", "connecting");
     speechRecognition.stop();
 }
 
@@ -985,6 +1193,8 @@ function renderTabelaMembros() {
             salvarEstado();
         });
     });
+
+    renderSpeechSpeakerOptions();
 }
 
 function addNovoMembro() {
@@ -1835,8 +2045,8 @@ function buildPromptSectionIA(section) {
 
 function buildPromptTranscricaoIA() {
     const texto = String(byId("transcricaoAudio")?.value ?? "").trim();
-    if (!texto) return "Transcrição / resumo do áudio:\n- Nenhum texto informado na aba Transcrição.";
-    return `Transcrição / resumo do áudio (apoio factual complementar):\n${texto}`;
+    if (!texto) return "Transcrição / texto-resumo do áudio:\n- Nenhum texto informado na aba Transcrição.";
+    return `Transcrição / texto-resumo do áudio (apoio factual complementar):\n${texto}`;
 }
 
 function gerarPromptIAAta() {
@@ -1858,7 +2068,8 @@ function gerarPromptIAAta() {
         "Regras obrigatórias:",
         "- Não invente fatos, falas, deliberações, votações, responsáveis ou prazos.",
         "- Leia cada linha, em regra, como Nome | tipo de fala | conteúdo essencial. Linhas iniciadas por Decisão, Votação, Encaminhamento, Responsável, Prazo ou Resultado representam o fechamento do tema.",
-        "- Se houver texto na aba Transcrição, trate-o como apoio factual complementar. Esse texto pode ser transcrição bruta ou resumo gerado por IA a partir do áudio.",
+        "- Se houver texto na aba Transcrição, trate-o como apoio factual complementar. Esse conteúdo pode ser a transcrição bruta ou um texto-resumo produzido a partir da transcrição das pessoas participantes da reunião.",
+        "- Quando houver texto-resumo derivado da transcrição, considere que ele já passou por arrumação prévia, com retirada de pausas, palavras grosseiras ou sem sentido e vícios de fala, preservando apenas o conteúdo útil da reunião.",
         "- Considere que os identificadores ou nomes abreviados dos participantes correspondem aos nomes completos presentes no DOCX e na lista de presença.",
         "- Na primeira menção de cada docente, use o nome completo.",
         "- Nas menções seguintes, use Prof. ou Profa. + primeiro nome + sobrenome.",
@@ -2775,6 +2986,7 @@ function salvarEstado() {
             saida: byId("saidaAta")?.value || "",
             ataSincronizada,
             transcricao: byId("transcricaoAudio")?.value || "",
+            transcricaoFalante: selectedSpeechParticipant || byId("transcricaoFalanteAtual")?.value || "",
             eSaudacao: byId("emailSaudacao")?.value || "",
             eOrgao: byId("emailOrgao")?.value || "",
             eLink: byId("emailLink")?.value || "",
@@ -2838,6 +3050,7 @@ function restaurarEstado() {
                 ? state.meta.ataSincronizada
                 : !esc(state.meta.saida);
             byId("transcricaoAudio").value = state.meta.transcricao || "";
+            selectedSpeechParticipant = state.meta.transcricaoFalante || "";
 
             byId("emailSaudacao").value = state.meta.eSaudacao || "Prezadas e prezados,";
             byId("emailOrgao").value = state.meta.eOrgao || "Colegiado da Faculdade de Engenharia de Pesca";

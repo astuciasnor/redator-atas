@@ -59,6 +59,7 @@
                     <button class="tabbtn" data-tab="ata">📝 Ata</button>
                     <button class="tabbtn" data-tab="email">📧 Convite</button>
                     <button class="tabbtn tabbtn-highlight" data-tab="datashow">▶️ Apresentação</button>
+                    <button class="tabbtn tabbtn-highlight" data-tab="ajuda">❓ Ajuda</button>
                 </nav>
 
                 <div class="sidebar-card">
@@ -294,19 +295,38 @@
                             <div class="card">
                                 <h2>Transcrição de áudio</h2>
                                 <p>Cole aqui a transcrição bruta da reunião ou o resumo produzido por IA a partir do áudio. Esse texto entra no prompt da IA como apoio complementar, mas não entra automaticamente no texto final da ata.</p>
-                                <div class="tools">
-                                    <button id="btnIniciarDitado" class="btn primary" type="button">🎤 Iniciar ditado</button>
-                                    <button id="btnPararDitado" class="btn" type="button" disabled>⏹️ Parar</button>
-                                    <span id="statusTranscricaoFala" class="pill">Preparando ditado...</span>
+                                <div class="transcricao-toolbar">
+                                    <div class="tools transcricao-tools">
+                                        <button id="btnIniciarDitado" class="btn primary" type="button">🎤 Iniciar ditado</button>
+                                        <button id="btnPararDitado" class="btn" type="button" disabled>⏸️ Pausar</button>
+                                        <button id="btnLimparTranscricao" class="btn danger" type="button">🧹 Limpar transcrição</button>
+                                        <span id="statusTranscricaoFala" class="pill">Preparando ditado...</span>
+                                    </div>
+
+                                    <div class="transcricao-meta">
+                                        <div class="field transcricao-speaker-field">
+                                            <label for="transcricaoFalanteAtual">Falante atual para o próximo bloco</label>
+                                            <input id="transcricaoFalanteAtual" type="text" list="transcricaoFalanteSugestoes"
+                                                placeholder="Digite e escolha o nome do falante..." autocomplete="off"
+                                                title="Digite o nome ou identificador do falante e escolha uma sugestão" />
+                                            <datalist id="transcricaoFalanteSugestoes"></datalist>
+                                        </div>
+
+                                        <div class="transcricao-note" role="note">
+                                            <strong>Retomada inteligente</strong>
+                                            <p>Ao pausar e retomar, o sistema fecha o bloco anterior com ponto final e inicia o próximo com letra maiúscula. O navegador não identifica vozes automaticamente; para registrar nomes durante a fala, digite o nome do participante e escolha uma sugestão antes de retomar.</p>
+                                        </div>
+                                    </div>
                                 </div>
                                 <p class="helper">Funciona melhor no Edge ou Chrome, com permissão de microfone liberada.</p>
-                                <textarea id="transcricaoAudio" class="output guardar" style="min-height: 440px;"
+                                <textarea id="transcricaoAudio" class="output guardar transcricao-output" style="min-height: 440px;"
                                     placeholder="Cole aqui a transcrição do áudio ou anotações literais da reunião..."></textarea>
                             </div>
                             <div class="card helper-card">
                                 <h3>Uso recomendado</h3>
                                 <ul class="plain-list">
                                     <li>Registrar falas ou trechos importantes.</li>
+                                    <li>Pausar, trocar o falante atual e retomar quando a palavra passar para outra pessoa.</li>
                                     <li>Conferir nomes, justificativas e deliberações.</li>
                                     <li>Transformar o conteúdo bruto em texto formal na aba da ata.</li>
                                 </ul>
@@ -447,6 +467,97 @@
                             <div id="loadingPPTX" class="loading-inline" style="display:none;">
                                 ⏳ Gerando arquivo, aguarde...
                             </div>
+                        </div>
+                    </section>
+
+                    <section id="ajuda" class="tabcontent">
+                        <div class="section-intro">
+                            <h2>Ajuda de uso</h2>
+                            <p>Orientações rápidas para fechar a ata, aproveitar a transcrição e usar o prompt de IA sem excesso de informação na tela.</p>
+                        </div>
+
+                        <div class="help-layout">
+                            <div class="stack help-guide help-main">
+                                <div class="help-panels help-guide-grid">
+                                    <article class="help-panel active" id="ajuda-ata">
+                                    <div class="help-card-head">
+                                        <span class="help-card-icon">📝</span>
+                                        <h4>Ata final</h4>
+                                    </div>
+                                    <p>Use esta etapa quando a pauta e os informes já estiverem preenchidos e você precisar consolidar o texto oficial da reunião.</p>
+                                    <ul class="plain-list help-list">
+                                        <li>Clique em Gerar texto base para montar a primeira versão da ata automaticamente.</li>
+                                        <li>Revise o texto editável antes de baixar o DOCX, principalmente nomes, horários e decisões.</li>
+                                        <li>Se fizer ajustes manuais, essa versão passa a ser a base usada na prévia e na exportação.</li>
+                                    </ul>
+                                    </article>
+
+                                    <article class="help-panel" id="ajuda-transcricao">
+                                    <div class="help-card-head">
+                                        <span class="help-card-icon">🎙️</span>
+                                        <h4>Resumo da transcrição</h4>
+                                    </div>
+                                    <p>A transcrição é um apoio de memória. Ela não entra sozinha na ata, mas ajuda a resumir falas, conferir nomes e recuperar encaminhamentos.</p>
+                                    <div class="help-mini-diagram" aria-hidden="true">
+                                        <span>Áudio ou texto bruto</span>
+                                        <span>→</span>
+                                        <span>resumo útil</span>
+                                        <span>→</span>
+                                        <span>ata revisada</span>
+                                    </div>
+                                    <ul class="plain-list help-list">
+                                        <li>Cole ou dite a transcrição na aba Transcrição para guardar o conteúdo bruto da reunião.</li>
+                                        <li>Leia o texto e extraia só o essencial: deliberações, justificativas, pendências e nomes corretos.</li>
+                                        <li>Evite copiar a fala literal inteira para a ata; transforme em resumo institucional claro.</li>
+                                    </ul>
+                                    </article>
+
+                                    <article class="help-panel" id="ajuda-prompt-ia">
+                                    <div class="help-card-head">
+                                        <span class="help-card-icon">🪄</span>
+                                        <h4>Prompt para a IA</h4>
+                                    </div>
+                                    <p>O prompt serve para orientar a IA a usar os dados da reunião do jeito certo, sem inventar fatos nem alterar o sentido das deliberações.</p>
+                                    <ul class="plain-list help-list">
+                                        <li>Clique em Copiar prompt IA depois de revisar identificação, pautas, informes e transcrição.</li>
+                                        <li>Envie o prompt junto com a ata ou com a transcrição resumida para pedir reescrita mais formal.</li>
+                                        <li>Sempre confira a resposta da IA antes de usar no documento final.</li>
+                                    </ul>
+                                    </article>
+                                </div>
+                            </div>
+
+                            <aside class="help-subsidebar" aria-label="Subtópicos da ajuda">
+                                <div class="help-subsidebar-card">
+                                    <p class="help-eyebrow">Subtópicos</p>
+                                    <h3>Navegação rápida</h3>
+                                    <p>Use estes atalhos para ir direto ao trecho da ajuda que você precisa.</p>
+
+                                    <nav class="help-subnav">
+                                        <a class="help-subnav-link active" href="#ajuda-ata" data-help-target="ajuda-ata">
+                                            <span class="help-subnav-icon">📝</span>
+                                            <span class="help-subnav-copy">
+                                                <strong>Ata final</strong>
+                                                <small>geração, revisão e exportação</small>
+                                            </span>
+                                        </a>
+                                        <a class="help-subnav-link" href="#ajuda-transcricao" data-help-target="ajuda-transcricao">
+                                            <span class="help-subnav-icon">🎙️</span>
+                                            <span class="help-subnav-copy">
+                                                <strong>Resumo da transcrição</strong>
+                                                <small>limpeza do texto e extração do essencial</small>
+                                            </span>
+                                        </a>
+                                        <a class="help-subnav-link" href="#ajuda-prompt-ia" data-help-target="ajuda-prompt-ia">
+                                            <span class="help-subnav-icon">🪄</span>
+                                            <span class="help-subnav-copy">
+                                                <strong>Prompt para a IA</strong>
+                                                <small>uso do resumo e revisão da resposta</small>
+                                            </span>
+                                        </a>
+                                    </nav>
+                                </div>
+                            </aside>
                         </div>
                     </section>
                 </div>
