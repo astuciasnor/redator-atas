@@ -124,13 +124,15 @@
                                     <div class="form-grid">
                                         <div class="field">
                                             <label for="presidente">Presidente</label>
-                                            <input id="presidente" class="guardar" type="text"
-                                                value="Prof. Dr. Carlos Alberto Martins Cordeiro" />
+                                            <input id="presidente" class="guardar" type="text" list="presidenteSugestoes"
+                                                autocomplete="off" value="Prof. Dr. Carlos Alberto Martins Cordeiro" />
+                                            <datalist id="presidenteSugestoes"></datalist>
                                         </div>
                                         <div class="field">
                                             <label for="redigidaPor">Redigida por</label>
-                                            <input id="redigidaPor" class="guardar" type="text"
-                                                value="Prof. Dr. Evaldo Martins da Silva" />
+                                            <input id="redigidaPor" class="guardar" type="text" list="redatorSugestoes"
+                                                autocomplete="off" value="Prof. Dr. Evaldo Martins da Silva" />
+                                            <datalist id="redatorSugestoes"></datalist>
                                         </div>
                                     </div>
                                 </div>
@@ -291,10 +293,25 @@
                     </section>
 
                     <section id="transcricao" class="tabcontent">
-                        <div class="split split-wide">
-                            <div class="card">
-                                <h2>Transcrição de áudio</h2>
-                                <p>Cole aqui a transcrição bruta da reunião ou o resumo produzido por IA a partir do áudio. Esse texto entra no prompt da IA como apoio complementar, mas não entra automaticamente no texto final da ata.</p>
+                        <div class="transcricao-grid">
+                            <div class="card transcricao-main">
+                                <div class="section-title-with-tip">
+                                    <h2>
+                                        <span class="inline-help-trigger" tabindex="0" aria-describedby="tooltipTranscricao">Transcrição de áudio</span>
+                                    </h2>
+                                    <div class="inline-help-popup" id="tooltipTranscricao" role="tooltip">
+                                        <strong>Como usar a transcrição</strong>
+                                        <p>Escolha o tema (pauta ou informe) na coluna da direita, clique no falante e dite. As falas ficam agrupadas por tema, uma abaixo da outra, com o identificador do participante.</p>
+                                        <ul class="plain-list compact-list">
+                                            <li>Selecione a pauta ou informe na coluna de temas.</li>
+                                            <li>Clique no nome de um falante: o bloco anterior fecha com ponto final e o ditado já registra a fala dele.</li>
+                                            <li>Cada fala entra com o identificador, uma embaixo da outra.</li>
+                                            <li>Esse texto entra no prompt da IA como apoio; transforme em texto formal na aba da ata.</li>
+                                            <li>Funciona melhor no Edge ou Chrome, com permissão de microfone liberada.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+
                                 <div class="transcricao-toolbar">
                                     <div class="tools transcricao-tools">
                                         <button id="btnIniciarDitado" class="btn primary" type="button">🎤 Iniciar ditado</button>
@@ -303,34 +320,38 @@
                                         <span id="statusTranscricaoFala" class="pill">Preparando ditado...</span>
                                     </div>
 
-                                    <div class="transcricao-meta">
-                                        <div class="field transcricao-speaker-field">
-                                            <label for="transcricaoFalanteAtual">Falante atual para o próximo bloco</label>
-                                            <input id="transcricaoFalanteAtual" type="text" list="transcricaoFalanteSugestoes"
-                                                placeholder="Digite e escolha o nome do falante..." autocomplete="off"
-                                                title="Digite o nome ou identificador do falante e escolha uma sugestão" />
-                                            <datalist id="transcricaoFalanteSugestoes"></datalist>
-                                        </div>
-
-                                        <div class="transcricao-note" role="note">
-                                            <strong>Retomada inteligente</strong>
-                                            <p>Ao pausar e retomar, o sistema fecha o bloco anterior com ponto final e inicia o próximo com letra maiúscula. O navegador não identifica vozes automaticamente; para registrar nomes durante a fala, digite o nome do participante e escolha uma sugestão antes de retomar.</p>
-                                        </div>
+                                    <div class="transcricao-active-line">
+                                        <span id="transcricaoTemaAtualLabel" class="pill pill-tema">Tema: —</span>
+                                        <span id="transcricaoFalanteAtualLabel" class="pill">Falante: —</span>
                                     </div>
                                 </div>
-                                <p class="helper">Funciona melhor no Edge ou Chrome, com permissão de microfone liberada.</p>
-                                <textarea id="transcricaoAudio" class="output guardar transcricao-output" style="min-height: 440px;"
+
+                                <textarea id="transcricaoAudio" class="output guardar transcricao-output transcricao-scroll" style="height: 260px; min-height: 260px; resize: vertical;"
                                     placeholder="Cole aqui a transcrição do áudio ou anotações literais da reunião..."></textarea>
                             </div>
-                            <div class="card helper-card">
-                                <h3>Uso recomendado</h3>
-                                <ul class="plain-list">
-                                    <li>Registrar falas ou trechos importantes.</li>
-                                    <li>Pausar, trocar o falante atual e retomar quando a palavra passar para outra pessoa.</li>
-                                    <li>Conferir nomes, justificativas e deliberações.</li>
-                                    <li>Transformar o conteúdo bruto em texto formal na aba da ata.</li>
-                                </ul>
-                            </div>
+
+                            <aside class="card transcricao-falantes">
+                                <div class="transcricao-speakers-head">
+                                    <h3>Falantes</h3>
+                                </div>
+                                <div id="transcricaoFalantesRapidos" class="speaker-quick-list speaker-quick-list--column" role="group"
+                                    aria-label="Selecionar falante atual"></div>
+                                <div class="field transcricao-speaker-field">
+                                    <label for="transcricaoFalanteAtual">Ou digite outro nome de falante</label>
+                                    <input id="transcricaoFalanteAtual" type="text" list="transcricaoFalanteSugestoes"
+                                        placeholder="Digite e escolha o nome do falante..." autocomplete="off"
+                                        title="Digite o nome ou identificador do falante e escolha uma sugestão" />
+                                    <datalist id="transcricaoFalanteSugestoes"></datalist>
+                                </div>
+                            </aside>
+
+                            <aside class="card transcricao-temas">
+                                <div class="transcricao-temas-head">
+                                    <h3>Temas da reunião</h3>
+                                    <p class="helper">Clique em uma pauta ou informe para agrupar as próximas falas. Role para ver todos os temas.</p>
+                                </div>
+                                <div id="transcricaoTemasLista" class="tema-list" role="group" aria-label="Selecionar tema atual"></div>
+                            </aside>
                         </div>
                     </section>
 

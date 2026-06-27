@@ -1225,10 +1225,215 @@ textarea.output:focus,
   color: var(--text-light);
 }
 
+.transcricao-speakers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transcricao-speakers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.transcricao-speakers-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light);
+}
+
+.speaker-quick-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.speaker-quick-list--column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.speaker-quick-list--column .speaker-chip {
+  width: 100%;
+  text-align: left;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.speaker-chip {
+  appearance: none;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 92%, var(--soft) 8%);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.speaker-chip:hover {
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--border));
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+}
+
+.speaker-chip:active {
+  transform: translateY(1px);
+}
+
+.speaker-chip.is-present {
+  border-color: rgba(21, 128, 61, 0.45);
+  background: rgba(21, 128, 61, 0.12);
+  color: var(--ok);
+}
+
+.speaker-chip.is-active {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+  box-shadow: var(--shadow2);
+}
+
+.speaker-chip.is-active.is-present {
+  color: #fff;
+}
+
+.transcricao-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px) minmax(220px, 280px);
+  gap: 18px;
+  align-items: start;
+}
+
+.transcricao-main {
+  min-width: 0;
+}
+
+.transcricao-falantes {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transcricao-falantes .transcricao-speakers-head h3 {
+  margin: 0 0 4px;
+}
+
+.transcricao-falantes .helper {
+  margin: 0 0 4px;
+}
+
+.transcricao-active-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill-tema {
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.transcricao-temas {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100vh - 120px);
+}
+
+.transcricao-temas-head h3 {
+  margin: 0 0 4px;
+}
+
+.transcricao-temas-head .helper {
+  margin: 0;
+}
+
+.tema-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 4px;
+  min-height: 0;
+}
+
+.tema-chip {
+  appearance: none;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-left: 4px solid color-mix(in srgb, var(--brand) 55%, var(--border));
+  background: color-mix(in srgb, var(--panel) 94%, var(--soft) 6%);
+  color: var(--text);
+  border-radius: var(--radius2);
+  padding: 10px 12px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.tema-chip:hover {
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--border));
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+}
+
+.tema-chip:active {
+  transform: translateY(1px);
+}
+
+.tema-chip.tema-informe {
+  border-left-color: color-mix(in srgb, var(--ok, #15803d) 55%, var(--border));
+}
+
+.tema-chip-kind {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-light);
+}
+
+.tema-chip-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.tema-chip.is-active {
+  border-color: var(--brand);
+  border-left-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 16%, transparent);
+  box-shadow: var(--shadow2);
+}
+
+.tema-chip.is-active .tema-chip-kind {
+  color: var(--brand);
+}
+
 .transcricao-output {
   line-height: 1.75;
   font-size: 15px;
   font-family: "Segoe UI", system-ui, sans-serif;
+  padding-bottom: 90px;
+  scroll-behavior: smooth;
 }
 
 #statusTranscricaoFala[data-state="listening"] {
@@ -1818,6 +2023,24 @@ textarea.output {
 }
 
 @media (max-width: 1080px) {
+  .transcricao-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .transcricao-temas {
+    position: static;
+    max-height: 360px;
+  }
+
+  .transcricao-falantes {
+    position: static;
+    max-height: none;
+  }
+
+  .speaker-quick-list--column .speaker-chip {
+    border-radius: 999px;
+  }
+
   .workspace-shell {
     grid-template-columns: 1fr;
   }

@@ -16,6 +16,12 @@ const MEMBER_RENAMES = {
     "Ivan": "Ivan Lucas Fernandes Matos",
     "Representante dos Técnicos da FEPESCA": "Breno Portilho de Sousa Maia",
 };
+// Identificador curto preferido por nome completo. Sobrescreve a sugestão automática
+// e fica salvo no navegador junto com o estado da reunião.
+const MEMBER_IDENTIFIER_OVERRIDES = {
+    "Carlos Eduardo Rangel de Andrade": "Eduardo",
+};
+const getIdentificadorPreferido = (nome) => MEMBER_IDENTIFIER_OVERRIDES[esc(nome)] || "";
 const REQUIRED_MEMBERS = [
     { nome: "Nils Edvin Asp Neto", funcao: "Prof. Dr." },
     { nome: "Rafael Anaisce das Chagas", funcao: "Prof. Dr." },
@@ -56,7 +62,15 @@ let speechRecognitionPaused = false;
 let speechRecognitionBaseText = "";
 let speechRecognitionFinalText = "";
 let speechRecognitionSessionSpeaker = "";
+let speechRecognitionSessionTheme = "";
+let speechRecognitionBaseTheme = "";
 let selectedSpeechParticipant = "";
+let selectedSpeechTheme = "";
+let salvarEstadoTimer = null;
+let promptIATimer = null;
+let speechRecognitionInterimText = "";
+let pendingSpeakerSwitch = null;
+let pendingSpeakerTimer = null;
 
 const LOGO_FIELDS = [
     { key: "fepesca", inputId: "logoFepescaUpload", previewId: "logoFepescaPreview", placeholderId: "logoFepescaPlaceholder", docImgId: "docLogoFepesca", docSlotId: "docLogoFepescaSlot" },
@@ -232,6 +246,10 @@ function activateTab(id, options = {}) {
     document.querySelectorAll(".tabcontent").forEach((item) => {
         item.classList.toggle("active", item.id === id);
     });
+    if (id === "transcricao") {
+        renderSpeechThemeOptions();
+        renderSpeechSpeakerOptions();
+    }
     if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -396,6 +414,16 @@ function setupGlobalListeners() {
     });
     on("transcricaoFalanteAtual", "change", (event) => commitSpeechSpeakerValue(event.target));
     on("transcricaoFalanteAtual", "blur", (event) => commitSpeechSpeakerValue(event.target));
+    on("transcricaoFalantesRapidos", "click", (event) => {
+        const botao = event.target.closest(".speaker-chip");
+        if (!botao) return;
+        selecionarFalanteRapido(botao.dataset.nome);
+    });
+    on("transcricaoTemasLista", "click", (event) => {
+        const botao = event.target.closest(".tema-chip");
+        if (!botao) return;
+        selecionarTemaRapido(botao.dataset.tema);
+    });
     on("saidaEmail", "input", salvarEstado);
     on("saidaAssuntoEmail", "input", salvarEstado);
 
@@ -450,7 +478,13 @@ function setupSpeechToText() {
             }
             else interimText = joinSpeechFragments(interimText, transcript);
         }
-        applySpeechTranscriptToField(interimText, { persist: hasFinalResult });
+        speechRecognitionInterimText = interimText;
+        if (hasFinalResult && pendingSpeakerSwitch) {
+            aplicarTrocaFalantePendente();
+            applySpeechTranscriptToField(interimText, { persist: true });
+        } else {
+            applySpeechTranscriptToField(interimText, { persist: hasFinalResult });
+        }
     };
 
     speechRecognition.onerror = (event) => {
@@ -463,6 +497,8 @@ function setupSpeechToText() {
 
     speechRecognition.onend = () => {
         speechRecognitionActive = false;
+        cancelarTrocaFalantePendente();
+        speechRecognitionInterimText = "";
         applySpeechTranscriptToField("", { persist: true });
         finalizeSpeechTranscriptField();
         updateSpeechControls(speechRecognitionPaused ? "Ditado em pausa" : "Pronto para ouvir", speechRecognitionPaused ? "paused" : "idle");
@@ -498,8 +534,8 @@ function normalizeSpeechFragment(value) {
 
 function syncTranscriptDerivedState(options = {}) {
     const { persist = true } = options;
-    renderPromptIA();
-    if (persist) salvarEstado();
+    agendarRenderPromptIA();
+    if (persist) agendarSalvarEstado();
 }
 
 function finalizeSpeechText(value) {
@@ -563,24 +599,126 @@ function commitSpeechSpeakerValue(input) {
     salvarEstado();
 }
 
-function getSelectedSpeechSpeaker() {
-    const liveValue = byId("transcricaoFalanteAtual")?.value;
-    return normalizeSpeechSpeakerValue(liveValue || selectedSpeechParticipant);
+function resolverIdentificadorPorReferencia(referencia) {
+    const membro = encontrarMembroPorReferencia(referencia);
+    return membro ? esc(membro.identificador) : esc(referencia);
 }
 
-function buildSpeechBlockText(value, speakerName = speechRecognitionSessionSpeaker) {
+function getSelectedSpeechSpeaker() {
+    const liveValue = byId("transcricaoFalanteAtual")?.value;
+    const ref = normalizeSpeechSpeakerValue(liveValue || selectedSpeechParticipant);
+    return resolverIdentificadorPorReferencia(ref);
+}
+
+const SPEECH_THEME_PREFIX = "### ";
+
+function buildSpeechThemeHeading(label) {
+    const tema = esc(label);
+    return tema ? `${SPEECH_THEME_PREFIX}${tema}` : "";
+}
+
+function detectLastThemeFromText(text) {
+    const marcador = SPEECH_THEME_PREFIX.trim();
+    const linhas = String(text ?? "").split("\n");
+    for (let index = linhas.length - 1; index >= 0; index -= 1) {
+        const linha = linhas[index].trim();
+        if (linha.startsWith(marcador)) {
+            return esc(linha.slice(marcador.length));
+        }
+    }
+    return "";
+}
+
+function textoTerminaEmCabecalho(text) {
+    const marcador = SPEECH_THEME_PREFIX.trim();
+    const linhas = String(text ?? "").trimEnd().split("\n");
+    const ultima = (linhas[linhas.length - 1] || "").trim();
+    return ultima.startsWith(marcador);
+}
+
+function appendThemeHeadingToBase(baseText, tema) {
+    const heading = buildSpeechThemeHeading(tema);
+    if (!heading) return String(baseText ?? "").trimEnd();
+    const base = String(baseText ?? "").trimEnd();
+    if (!base) return heading;
+    const baseFinalizada = textoTerminaEmCabecalho(base) ? base : finalizeSpeechText(base);
+    return `${baseFinalizada}\n\n${heading}`;
+}
+
+function buildSpeechBlockText(value, speakerLabel = speechRecognitionSessionSpeaker) {
     const text = normalizeSpeechFragment(value);
     if (!text) return "";
-    const prefix = esc(speakerName) ? `${esc(speakerName)}: ` : "";
+    const prefix = esc(speakerLabel) ? `${esc(speakerLabel)}: ` : "";
     return `${prefix}${capitalizeSpeechBlock(text)}`;
 }
 
-function composeSpeechTranscriptText(baseText, liveText, speakerName = speechRecognitionSessionSpeaker) {
+function appendSpeechBlock(baseText, blockText, options = {}) {
+    const { sessionTheme = "", baseTheme = "", finalizeBlock = false } = options;
     const base = String(baseText ?? "").trimEnd();
-    const bloco = buildSpeechBlockText(liveText, speakerName);
-    if (!base) return bloco;
+    const bloco = finalizeBlock ? finalizeSpeechText(blockText) : blockText;
     if (!bloco) return base;
-    return `${finalizeSpeechText(base)}\n\n${bloco}`;
+    const precisaCabecalho = esc(sessionTheme) && safeLower(sessionTheme) !== safeLower(baseTheme);
+    const heading = precisaCabecalho ? buildSpeechThemeHeading(sessionTheme) : "";
+    if (!base) {
+        return heading ? `${heading}\n${bloco}` : bloco;
+    }
+    const baseFinalizada = textoTerminaEmCabecalho(base) ? base : finalizeSpeechText(base);
+    if (heading) {
+        return `${baseFinalizada}\n\n${heading}\n${bloco}`;
+    }
+    return `${baseFinalizada}\n${bloco}`;
+}
+
+function composeSpeechTranscriptText(baseText, liveText, speakerLabel = speechRecognitionSessionSpeaker, sessionTheme = speechRecognitionSessionTheme, baseTheme = speechRecognitionBaseTheme) {
+    const bloco = buildSpeechBlockText(liveText, speakerLabel);
+    if (!bloco) return String(baseText ?? "").trimEnd();
+    return appendSpeechBlock(baseText, bloco, { sessionTheme, baseTheme });
+}
+
+function autoScrollTranscricao(textarea) {
+    if (!textarea) return;
+    // Rola sempre ate o fim; o padding-bottom do CSS garante folga para a
+    // ultima linha nao colar na borda inferior. Mais confiavel que calcular
+    // linhas/alturas manualmente.
+    textarea.scrollTop = textarea.scrollHeight;
+}
+
+function agendarSalvarEstado(delay = 400) {
+    if (salvarEstadoTimer) clearTimeout(salvarEstadoTimer);
+    salvarEstadoTimer = setTimeout(() => {
+        salvarEstadoTimer = null;
+        salvarEstado();
+    }, delay);
+}
+
+function flushSalvarEstado() {
+    if (salvarEstadoTimer) {
+        clearTimeout(salvarEstadoTimer);
+        salvarEstadoTimer = null;
+    }
+    salvarEstado();
+}
+
+function agendarRenderPromptIA(delay = 300) {
+    if (promptIATimer) clearTimeout(promptIATimer);
+    promptIATimer = setTimeout(() => {
+        promptIATimer = null;
+        renderPromptIA();
+    }, delay);
+}
+
+function commitLiveBlockToBase() {
+    const bloco = buildSpeechBlockText(speechRecognitionFinalText, speechRecognitionSessionSpeaker);
+    if (!bloco) return;
+    speechRecognitionBaseText = appendSpeechBlock(speechRecognitionBaseText, bloco, {
+        sessionTheme: speechRecognitionSessionTheme,
+        baseTheme: speechRecognitionBaseTheme,
+        finalizeBlock: true,
+    });
+    if (esc(speechRecognitionSessionTheme)) {
+        speechRecognitionBaseTheme = speechRecognitionSessionTheme;
+    }
+    speechRecognitionFinalText = "";
 }
 
 function joinSpeechFragments(baseText, fragment) {
@@ -594,7 +732,7 @@ function joinSpeechFragments(baseText, fragment) {
 function buildSpeechTranscriptText(interimText = "") {
     const baseText = String(speechRecognitionBaseText ?? "").trimEnd();
     const liveText = joinSpeechFragments(speechRecognitionFinalText, interimText);
-    return composeSpeechTranscriptText(baseText, liveText, speechRecognitionSessionSpeaker);
+    return composeSpeechTranscriptText(baseText, liveText, speechRecognitionSessionSpeaker, speechRecognitionSessionTheme, speechRecognitionBaseTheme);
 }
 
 function applySpeechTranscriptToField(interimText = "", options = {}) {
@@ -608,6 +746,7 @@ function applySpeechTranscriptToField(interimText = "", options = {}) {
     }
     const cursor = textarea.value.length;
     textarea.setSelectionRange(cursor, cursor);
+    autoScrollTranscricao(textarea);
 }
 
 function finalizeSpeechTranscriptField() {
@@ -620,6 +759,7 @@ function finalizeSpeechTranscriptField() {
     }
     const cursor = textarea.value.length;
     textarea.setSelectionRange(cursor, cursor);
+    autoScrollTranscricao(textarea);
 }
 
 function limparTranscricaoTexto() {
@@ -637,6 +777,10 @@ function limparTranscricaoTexto() {
     speechRecognitionBaseText = "";
     speechRecognitionFinalText = "";
     speechRecognitionSessionSpeaker = "";
+    speechRecognitionSessionTheme = "";
+    speechRecognitionBaseTheme = "";
+    speechRecognitionInterimText = "";
+    cancelarTrocaFalantePendente();
 
     textarea.value = "";
     syncTranscriptDerivedState({ persist: true });
@@ -654,12 +798,53 @@ function limparTranscricaoTexto() {
     showToast("Transcrição limpa.", "success");
 }
 
+function getSpeechSpeakerEntries() {
+    garantirIdentificadoresMembros();
+    return getTodosMembros()
+        .map((membro) => ({
+            nome: esc(membro.nome),
+            identificador: esc(membro.identificador),
+            funcao: esc(membro.funcao),
+            presente: membro.status === "presente",
+        }))
+        .filter((item) => item.nome && item.identificador)
+        .sort((a, b) => {
+            if (a.presente !== b.presente) return a.presente ? -1 : 1;
+            return a.identificador.localeCompare(b.identificador, "pt-BR", { sensitivity: "base" });
+        });
+}
+
+function updateActiveSpeakerLabel(nome) {
+    const label = byId("transcricaoFalanteAtualLabel");
+    if (label) label.textContent = `Falante: ${esc(nome) || "—"}`;
+}
+
+function buildConducaoNomeFormatado(membro) {
+    const nome = esc(membro.nome);
+    const funcao = esc(membro.funcao);
+    if (!nome) return "";
+    return /prof|dr/i.test(funcao) ? `${funcao} ${nome}` : nome;
+}
+
+function renderConducaoSugestoes() {
+    const presentes = getTodosMembros()
+        .filter((membro) => membro.status === "presente" && esc(membro.nome))
+        .map(buildConducaoNomeFormatado)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+    const options = presentes.map((nome) => `<option value="${escapeHtml(nome)}"></option>`).join("");
+    ["presidenteSugestoes", "redatorSugestoes"].forEach((id) => {
+        const datalist = byId(id);
+        if (datalist) datalist.innerHTML = options;
+    });
+}
+
 function renderSpeechSpeakerOptions() {
     const input = byId("transcricaoFalanteAtual");
     const datalist = byId("transcricaoFalanteSugestoes");
     if (!input || !datalist) return;
 
-    const entries = getMemberIdentifierEntries();
+    const entries = getSpeechSpeakerEntries();
     const wantedValue = normalizeSpeechSpeakerValue(selectedSpeechParticipant || input.value);
 
     datalist.innerHTML = entries.map((item) => {
@@ -667,8 +852,170 @@ function renderSpeechSpeakerOptions() {
         return `<option value="${escapeHtml(item.nome)}" label="${escapeHtml(label)}"></option>`;
     }).join("");
 
+    const lista = byId("transcricaoFalantesRapidos");
+    if (lista) {
+        const ativo = safeLower(wantedValue);
+        lista.innerHTML = entries.map((item) => {
+            const classes = ["speaker-chip"];
+            if (item.presente) classes.push("is-present");
+            if (ativo && safeLower(item.nome) === ativo) classes.push("is-active");
+            const detalhe = item.identificador !== item.nome ? item.nome : item.funcao;
+            const titulo = detalhe ? `${item.nome}${item.funcao ? ` — ${item.funcao}` : ""}` : item.nome;
+            return `<button type="button" class="${classes.join(" ")}" data-nome="${escapeHtml(item.nome)}" title="${escapeHtml(titulo)}">${escapeHtml(item.identificador)}</button>`;
+        }).join("");
+    }
+
     selectedSpeechParticipant = wantedValue;
     input.value = wantedValue;
+    updateActiveSpeakerLabel(resolverIdentificadorPorReferencia(wantedValue));
+}
+
+function marcarFalanteAtivoRapido(nome) {
+    const lista = byId("transcricaoFalantesRapidos");
+    const alvo = safeLower(normalizeSpeechSpeakerValue(nome));
+    if (lista) {
+        lista.querySelectorAll(".speaker-chip").forEach((chip) => {
+            const ativo = alvo && safeLower(chip.getAttribute("data-nome")) === alvo;
+            chip.classList.toggle("is-active", ativo);
+        });
+    }
+    updateActiveSpeakerLabel(resolverIdentificadorPorReferencia(nome));
+}
+
+function getSpeechThemes() {
+    const temas = [];
+    pautas.forEach((item, index) => {
+        const ordem = index + 1;
+        const titulo = esc(item.title);
+        const label = titulo ? `Pauta ${ordem} — ${titulo}` : `Pauta ${ordem}`;
+        temas.push({ kind: "pauta", ordem, titulo: titulo || `Pauta ${ordem}`, label });
+    });
+    informes.forEach((item, index) => {
+        const ordem = index + 1;
+        const titulo = esc(item.title);
+        const label = titulo ? `Informe ${ordem} — ${titulo}` : `Informe ${ordem}`;
+        temas.push({ kind: "informe", ordem, titulo: titulo || `Informe ${ordem}`, label });
+    });
+    return temas;
+}
+
+function updateActiveThemeLabel(label) {
+    const el = byId("transcricaoTemaAtualLabel");
+    if (el) el.textContent = `Tema: ${esc(label) || "—"}`;
+}
+
+function renderSpeechThemeOptions() {
+    const lista = byId("transcricaoTemasLista");
+    if (!lista) return;
+    const temas = getSpeechThemes();
+    if (!temas.length) {
+        lista.innerHTML = '<p class="helper">Nenhuma pauta ou informe cadastrado ainda. Crie temas nas abas Pautas e Informes.</p>';
+        updateActiveThemeLabel(selectedSpeechTheme);
+        return;
+    }
+    const ativo = safeLower(selectedSpeechTheme);
+    lista.innerHTML = temas.map((tema) => {
+        const classes = ["tema-chip", `tema-${tema.kind}`];
+        if (ativo && safeLower(tema.label) === ativo) classes.push("is-active");
+        return `<button type="button" class="${classes.join(" ")}" data-tema="${escapeHtml(tema.label)}" title="${escapeHtml(tema.label)}">
+            <span class="tema-chip-kind">${tema.kind === "pauta" ? "Pauta" : "Informe"} ${tema.ordem}</span>
+            <span class="tema-chip-title">${escapeHtml(tema.titulo)}</span>
+        </button>`;
+    }).join("");
+    updateActiveThemeLabel(selectedSpeechTheme);
+}
+
+function selecionarTemaRapido(label) {
+    const tema = esc(label);
+    if (!tema) return;
+    selectedSpeechTheme = tema;
+
+    const textarea = byId("transcricaoAudio");
+
+    if (speechRecognitionActive) {
+        // Fecha o bloco da fala atual sob o tema anterior.
+        commitLiveBlockToBase();
+        // Insere o cabecalho do novo tema imediatamente na base, se mudou.
+        if (safeLower(speechRecognitionBaseTheme) !== safeLower(tema)) {
+            speechRecognitionBaseText = appendThemeHeadingToBase(speechRecognitionBaseText, tema);
+            speechRecognitionBaseTheme = tema;
+        }
+        speechRecognitionSessionTheme = tema;
+        applySpeechTranscriptToField("", { persist: true });
+    } else if (textarea) {
+        // Sem ditado ativo: insere o cabecalho diretamente no texto visivel.
+        const atual = detectLastThemeFromText(textarea.value);
+        if (safeLower(atual) !== safeLower(tema)) {
+            textarea.value = appendThemeHeadingToBase(textarea.value, tema);
+            syncTranscriptDerivedState({ persist: true });
+            autoScrollTranscricao(textarea);
+        }
+    }
+
+    updateActiveThemeLabel(tema);
+    agendarSalvarEstado();
+    renderSpeechThemeOptions();
+}
+
+function trocarFalanteAtivo(novoIdentificador) {
+    commitLiveBlockToBase();
+    speechRecognitionSessionSpeaker = novoIdentificador;
+    applySpeechTranscriptToField("", { persist: true });
+}
+
+function aplicarTrocaFalantePendente() {
+    if (!pendingSpeakerSwitch) return;
+    const { identificador, nome } = pendingSpeakerSwitch;
+    cancelarTrocaFalantePendente();
+    commitLiveBlockToBase();
+    speechRecognitionSessionSpeaker = identificador;
+    selectedSpeechParticipant = nome;
+    const input = byId("transcricaoFalanteAtual");
+    if (input) input.value = nome;
+    marcarFalanteAtivoRapido(nome);
+    agendarSalvarEstado();
+}
+
+function cancelarTrocaFalantePendente() {
+    pendingSpeakerSwitch = null;
+    if (pendingSpeakerTimer) {
+        clearTimeout(pendingSpeakerTimer);
+        pendingSpeakerTimer = null;
+    }
+}
+
+function selecionarFalanteRapido(nome) {
+    const nomeFinal = normalizeSpeechSpeakerValue(nome);
+    if (!nomeFinal) return;
+    const identificador = resolverIdentificadorPorReferencia(nomeFinal);
+
+    const input = byId("transcricaoFalanteAtual");
+    selectedSpeechParticipant = nomeFinal;
+    if (input) input.value = nomeFinal;
+
+    if (speechRecognitionActive) {
+        if (esc(speechRecognitionInterimText)) {
+            // Há fala em andamento ainda sendo reconhecida: enfileira a troca
+            // para não misturar os resíduos da fala atual no novo falante.
+            pendingSpeakerSwitch = { identificador, nome: nomeFinal };
+            if (pendingSpeakerTimer) clearTimeout(pendingSpeakerTimer);
+            pendingSpeakerTimer = setTimeout(() => {
+                pendingSpeakerTimer = null;
+                if (pendingSpeakerSwitch && speechRecognitionActive) {
+                    aplicarTrocaFalantePendente();
+                    applySpeechTranscriptToField(speechRecognitionInterimText, { persist: true });
+                }
+            }, 1200);
+        } else {
+            cancelarTrocaFalantePendente();
+            trocarFalanteAtivo(identificador);
+            agendarSalvarEstado();
+        }
+    } else {
+        iniciarTranscricaoFala();
+    }
+
+    marcarFalanteAtivoRapido(nomeFinal);
 }
 
 function mapSpeechRecognitionError(errorCode) {
@@ -695,7 +1042,11 @@ function iniciarTranscricaoFala() {
 
     const wasPaused = speechRecognitionPaused;
     speechRecognitionBaseText = String(textarea.value ?? "").trimEnd();
+    speechRecognitionBaseTheme = detectLastThemeFromText(speechRecognitionBaseText);
+    speechRecognitionSessionTheme = esc(selectedSpeechTheme) || speechRecognitionBaseTheme;
     speechRecognitionFinalText = "";
+    speechRecognitionInterimText = "";
+    cancelarTrocaFalantePendente();
     speechRecognitionSessionSpeaker = getSelectedSpeechSpeaker();
     speechRecognitionPaused = false;
     updateSpeechControls(wasPaused ? "Retomando ditado..." : "Conectando microfone...", "connecting");
@@ -1013,6 +1364,8 @@ function buildBaseIdentifierOptions(nome) {
 
 function sugerirIdentificadorMembro(membro, todos = getTodosMembros()) {
     const nome = esc(membro?.nome);
+    const preferido = getIdentificadorPreferido(nome);
+    if (preferido) return preferido;
     const opcoes = buildBaseIdentifierOptions(nome);
     const primeiroNome = opcoes[0] || nome;
     const repeticoesPrimeiroNome = todos.filter((item) => safeLower(getFirstRelevantNamePart(item?.nome)) === safeLower(primeiroNome)).length;
@@ -1023,7 +1376,10 @@ function sugerirIdentificadorMembro(membro, todos = getTodosMembros()) {
 function garantirIdentificadoresMembros() {
     const todos = getTodosMembros();
     todos.forEach((membro) => {
-        if (!esc(membro.identificador)) {
+        const preferido = getIdentificadorPreferido(membro.nome);
+        if (preferido) {
+            membro.identificador = preferido;
+        } else if (!esc(membro.identificador)) {
             membro.identificador = sugerirIdentificadorMembro(membro, todos);
         }
     });
@@ -1195,6 +1551,7 @@ function renderTabelaMembros() {
     });
 
     renderSpeechSpeakerOptions();
+    renderConducaoSugestoes();
 }
 
 function addNovoMembro() {
@@ -1491,6 +1848,7 @@ function bindItemEvents(container, arrayOrigem) {
         div.querySelector(".editar-titulo").addEventListener("input", (event) => {
             obj.title = esc(event.target.value);
             sincronizarAtaSePossivel();
+            renderSpeechThemeOptions();
             salvarEstado();
         });
         const textArea = div.querySelector(".editar-texto");
@@ -1584,6 +1942,7 @@ function bindItemEvents(container, arrayOrigem) {
 function renderAllItems() {
     renderPautas();
     renderInformes();
+    renderSpeechThemeOptions();
 }
 
 function renderPautas() {
@@ -2987,6 +3346,7 @@ function salvarEstado() {
             ataSincronizada,
             transcricao: byId("transcricaoAudio")?.value || "",
             transcricaoFalante: selectedSpeechParticipant || byId("transcricaoFalanteAtual")?.value || "",
+            transcricaoTema: selectedSpeechTheme || "",
             eSaudacao: byId("emailSaudacao")?.value || "",
             eOrgao: byId("emailOrgao")?.value || "",
             eLink: byId("emailLink")?.value || "",
@@ -3051,6 +3411,7 @@ function restaurarEstado() {
                 : !esc(state.meta.saida);
             byId("transcricaoAudio").value = state.meta.transcricao || "";
             selectedSpeechParticipant = state.meta.transcricaoFalante || "";
+            selectedSpeechTheme = state.meta.transcricaoTema || "";
 
             byId("emailSaudacao").value = state.meta.eSaudacao || "Prezadas e prezados,";
             byId("emailOrgao").value = state.meta.eOrgao || "Colegiado da Faculdade de Engenharia de Pesca";
