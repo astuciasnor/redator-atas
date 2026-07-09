@@ -2561,9 +2561,24 @@ function collectAttendance() {
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
 
     todos.forEach((membro) => {
-        const nomeFmt = membro.funcao && membro.funcao !== "—"
-            ? `${membro.funcao} ${membro.nome}` // MODIFIED: titulo before name
-            : membro.nome;
+        let prefixoTitulo = "";
+        
+        // Se a representação for docência, garantiremos o prefixo Prof./Profa. no texto
+        if (membro.representacao === "Docentes" || safeLower(membro.funcao).includes("prof")) {
+            // Se já tem prefixo na função explícita, a gente usa
+            if (safeLower(membro.funcao).includes("prof")) {
+                prefixoTitulo = `${membro.funcao} `;
+            } else {
+                // Tenta inferir se é homem ou mulher pelo final do primeiro nome:
+                const isFeminino = membro.nome.split(" ")[0].endsWith("a");
+                prefixoTitulo = isFeminino ? `Profa. Dra. ` : `Prof. Dr. `;
+            }
+        } else if (membro.funcao && membro.funcao !== "—" && membro.funcao.trim() !== "") {
+            prefixoTitulo = `${membro.funcao} `;
+        }
+        
+        const nomeFmt = `${prefixoTitulo}${membro.nome}`.trim();
+
         if (membro.status === "presente") presentes.push(nomeFmt);
         if (membro.status === "ausente") {
             if (membro.motivo) ausJust.push(`${nomeFmt} — ${membro.motivo}`);
