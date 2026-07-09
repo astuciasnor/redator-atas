@@ -298,8 +298,8 @@ function setupGlobalListeners() {
             
             // Cria os dados básicos com a data atual e o número sugerido da ata para o reload.
             localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                "numeroAta": suggestNumber,
-                "dataReuniao": now.toISOString().slice(0,10)
+                meta: { numero: suggestNumber, data: now.toISOString().slice(0,10) },
+                tema: document.body.getAttribute("data-theme") || DEFAULT_THEME
             }));
             
             location.reload();
@@ -3408,11 +3408,12 @@ function restaurarEstado() {
     if (!rawState) {
         setHoje();
         const now = new Date();
-        byId("numeroAta").value = `__/${now.getFullYear()}`;
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        byId("numeroAta").value = `${month}/${now.getFullYear()}`;
         setPautasPadrao();
         setInformesPadrao();
         restoreSectionBases();
-        document.body.setAttribute("data-theme", DEFAULT_THEME);
+        document.body.setAttribute("data-theme", "dark");
         return;
     }
 
