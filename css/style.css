@@ -1496,6 +1496,10 @@ textarea.output:focus,
   background: linear-gradient(135deg, var(--brand), var(--brand2));
   border-color: var(--brand);
   color: #fff;
+  font-size: 15px;
+  padding: 12px 20px;
+  box-shadow: 0 4px 12px rgba(15, 76, 129, 0.4);
+  transform: scale(1.02);
 }
 
 .btn:disabled {
@@ -1505,7 +1509,9 @@ textarea.output:focus,
 }
 
 .btn.primary:hover {
-  filter: brightness(1.04);
+  filter: brightness(1.1);
+  transform: scale(1.04) translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 76, 129, 0.5);
 }
 
 .btn.danger {
