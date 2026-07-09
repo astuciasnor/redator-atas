@@ -294,11 +294,12 @@ function setupGlobalListeners() {
             const now = new Date();
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, "0");
-            const suggestNumber = `__/${year}`;
+            const suggestNumber = `${month}/${year}`;
             
-            // set up dummy data with default data/year
+            // Cria os dados básicos com a data atual e o número sugerido da ata para o reload.
             localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                meta: { numero: suggestNumber, data: now.toISOString().slice(0,10) }
+                "numeroAta": suggestNumber,
+                "dataReuniao": now.toISOString().slice(0,10)
             }));
             
             location.reload();
