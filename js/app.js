@@ -1455,6 +1455,41 @@ function resolverNomeCompletoPorReferencia(referencia) {
     return encontrarMembroPorReferencia(referencia)?.nome || esc(referencia);
 }
 
+const MOTIVOS_AUSENCIA = [
+    "Apenas se ausente...",
+    "Férias",
+    "Aulas",
+    "Afastado",
+    "Saúde",
+    "Evento Acadêmico",
+    "Sem justificativa"
+];
+
+function gerarOpcoesRepresentacao(valorAtual) {
+    const opcoes = ["", "Docentes", "Técnicos", "Discentes", "Convidados"];
+    // Extrai e normaliza do valor do campo 'funcao' caso a tabela não tenha
+    // sido completamente migrada da estrutura antiga.
+    return opcoes.map(opcao => {
+        const text = opcao || "—";
+        const selected = safeLower(opcao) === safeLower(valorAtual) ? "selected" : "";
+        return `<option value="${opcao}" ${selected}>${text}</option>`;
+    }).join("");
+}
+
+function processarAbaixoFuncaoERepresentacao(membro) {
+     if (membro.representacao !== undefined) return;
+     const fLow = safeLower(membro.funcao || "");
+     if (fLow.includes("discente")) membro.representacao = "Discentes";
+     else if (fLow.includes("técnico") || fLow.includes("tecnico")) membro.representacao = "Técnicos";
+     else if (fLow.includes("prof") || fLow.includes("docente") || fLow.includes("diretor")) membro.representacao = "Docentes";
+     else membro.representacao = "";
+
+     // Limpa o nome da função que antes agregava representação
+     if(fLow.includes("representante")) {
+        membro.funcao = membro.funcao.replace(/Representante dos/ig, "").replace(/Representante/ig,"").trim();
+     }
+}
+
 function renderTabelaMembros() {
     const tbody = byId("tbody-membros");
     if (!tbody) return;
@@ -1472,7 +1507,10 @@ function renderTabelaMembros() {
         const isAusente = membro.status === "ausente";
         const disableMotivo = !isAusente;
         const isExtra = membrosExtras.includes(membro);
-                const identifierOptions = buildIdentifierOptionsForMember(membro, todos);
+        
+        processarAbaixoFuncaoERepresentacao(membro);
+        
+        const identifierOptions = buildIdentifierOptionsForMember(membro, todos);
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
@@ -1480,11 +1518,16 @@ function renderTabelaMembros() {
         <div class="name">${escapeHtml(membro.nome)}</div>
         <div class="role">${escapeHtml(membro.funcao || "—")} ${isExtra ? '<span style="color:var(--brand);font-weight:700">[Extra]</span>' : ""}</div>
       </td>
-            <td>
-                <select class="member-identificador" aria-label="Identificador do participante">
+      <td>
+          <select class="member-representacao" aria-label="Representação do participante">
+               ${gerarOpcoesRepresentacao(membro.representacao)}
+          </select>
+      </td>
+      <td>
+           <select class="member-identificador" aria-label="Identificador do participante">
                     ${identifierOptions.map((opcao) => `<option value="${escapeHtml(opcao)}" ${safeLower(opcao) === safeLower(membro.identificador) ? "selected" : ""}>${escapeHtml(opcao)}</option>`).join("")}
                 </select>
-            </td>
+      </td>
       <td>
         <div class="radio-group">
           <label class="radio-label">
@@ -1496,7 +1539,10 @@ function renderTabelaMembros() {
         </div>
       </td>
       <td>
-        <input class="motivo" type="text" placeholder="Apenas se ausente..." value="${escapeHtml(membro.motivo || "")}" ${disableMotivo ? "disabled" : ""}>
+        <select class="motivo" ${disableMotivo ? "disabled" : ""}>
+             ${MOTIVOS_AUSENCIA.map(m => `<option value="${m === "Apenas se ausente..." ? "" : m}" ${membro.motivo === m ? "selected" : ""}>${m}</option>`).join('')}
+             ${membro.motivo && !MOTIVOS_AUSENCIA.includes(membro.motivo) ? `<option value="${escapeHtml(membro.motivo)}" selected>${escapeHtml(membro.motivo)}</option>` : ''}
+        </select>
       </td>
       <td style="text-align:center; display:flex; gap:6px; justify-content:center;">
         <button class="btn edit small btnEditarMembro" title="Editar participante">✏️</button>
@@ -1506,10 +1552,17 @@ function renderTabelaMembros() {
         tbody.appendChild(tr);
 
         const radios = tr.querySelectorAll(`input[name="${idUnico}"]`);
-        const motivoInput = tr.querySelector(".motivo");
+        const motivoSelect = tr.querySelector(".motivo");
         const identificadorSelect = tr.querySelector(".member-identificador");
+        const representacaoSelect = tr.querySelector(".member-representacao");
         const btnExcluir = tr.querySelector(".btnExcluirMembro");
         const btnEditar = tr.querySelector(".btnEditarMembro");
+
+        representacaoSelect.addEventListener("change", (e) => {
+             membro.representacao = e.target.value;
+             sincronizarAtaSePossivel();
+             salvarEstado();
+        });
 
         identificadorSelect.addEventListener("change", (event) => {
             const novoValor = esc(event.target.value);
@@ -1559,11 +1612,11 @@ function renderTabelaMembros() {
             radio.addEventListener("change", () => {
                 membro.status = radio.value;
                 if (radio.value === "ausente") {
-                    motivoInput.disabled = false;
-                    motivoInput.focus();
+                    motivoSelect.disabled = false;
+                    motivoSelect.focus();
                 } else {
-                    motivoInput.disabled = true;
-                    motivoInput.value = "";
+                    motivoSelect.disabled = true;
+                    motivoSelect.value = "";
                     membro.motivo = "";
                 }
                 sincronizarAtaSePossivel();
@@ -1571,7 +1624,7 @@ function renderTabelaMembros() {
             });
         });
 
-        motivoInput.addEventListener("input", (event) => {
+        motivoSelect.addEventListener("change", (event) => {
             membro.motivo = esc(event.target.value);
             sincronizarAtaSePossivel();
             salvarEstado();
