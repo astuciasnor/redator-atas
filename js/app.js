@@ -1466,7 +1466,7 @@ const MOTIVOS_AUSENCIA = [
 ];
 
 function gerarOpcoesRepresentacao(valorAtual) {
-    const opcoes = ["", "Docentes", "Técnicos", "Discentes", "Convidados"];
+    const opcoes = ["", "Prof. Dr.", "Profa. Dra.", "Técnicos", "Discentes", "Convidados"];
     // Extrai e normaliza do valor do campo 'funcao' caso a tabela não tenha
     // sido completamente migrada da estrutura antiga.
     return opcoes.map(opcao => {
@@ -1481,7 +1481,8 @@ function processarAbaixoFuncaoERepresentacao(membro) {
      const fLow = safeLower(membro.funcao || "");
      if (fLow.includes("discente")) membro.representacao = "Discentes";
      else if (fLow.includes("técnico") || fLow.includes("tecnico")) membro.representacao = "Técnicos";
-     else if (fLow.includes("prof") || fLow.includes("docente") || fLow.includes("diretor")) membro.representacao = "Docentes";
+     else if (fLow.includes("profa") || fLow.includes("prof.a") || fLow.includes("professora") || fLow.includes("diretora")) membro.representacao = "Profa. Dra.";
+     else if (fLow.includes("prof") || fLow.includes("docente") || fLow.includes("diretor")) membro.representacao = "Prof. Dr.";
      else membro.representacao = "";
 
      // Limpa o nome da função que antes agregava representação
@@ -2564,15 +2565,8 @@ function collectAttendance() {
         let prefixoTitulo = "";
         
         // Se a representação for docência, garantiremos o prefixo Prof./Profa. no texto
-        if (membro.representacao === "Docentes" || safeLower(membro.funcao).includes("prof")) {
-            // Se já tem prefixo na função explícita, a gente usa
-            if (safeLower(membro.funcao).includes("prof")) {
-                prefixoTitulo = `${membro.funcao} `;
-            } else {
-                // Tenta inferir se é homem ou mulher pelo final do primeiro nome:
-                const isFeminino = membro.nome.split(" ")[0].endsWith("a");
-                prefixoTitulo = isFeminino ? `Profa. Dra. ` : `Prof. Dr. `;
-            }
+        if (membro.representacao === "Prof. Dr." || membro.representacao === "Profa. Dra.") {
+             prefixoTitulo = `${membro.representacao} `;
         } else if (membro.funcao && membro.funcao !== "—" && membro.funcao.trim() !== "") {
             prefixoTitulo = `${membro.funcao} `;
         }
