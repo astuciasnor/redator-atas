@@ -1516,7 +1516,7 @@ function renderTabelaMembros() {
         tr.innerHTML = `
       <td>
         <div class="name">${escapeHtml(membro.nome)}</div>
-        <div class="role">${escapeHtml(membro.funcao || "—")} ${isExtra ? '<span style="color:var(--brand);font-weight:700">[Extra]</span>' : ""}</div>
+        ${isExtra ? '<div class="role"><span style="color:var(--brand);font-weight:700">[Participante Extra]</span></div>' : ""}
       </td>
       <td>
           <select class="member-representacao" aria-label="Representação do participante">
