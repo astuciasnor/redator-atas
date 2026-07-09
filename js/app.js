@@ -1465,15 +1465,21 @@ const MOTIVOS_AUSENCIA = [
     "Sem justificativa"
 ];
 
-function gerarOpcoesRepresentacao(valorAtual) {
-    const opcoes = ["", "Prof. Dr.", "Profa. Dra.", "Técnicos", "Discentes", "Convidados"];
-    // Extrai e normaliza do valor do campo 'funcao' caso a tabela não tenha
-    // sido completamente migrada da estrutura antiga.
-    return opcoes.map(opcao => {
-        const text = opcao || "—";
-        const selected = safeLower(opcao) === safeLower(valorAtual) ? "selected" : "";
-        return `<option value="${opcao}" ${selected}>${text}</option>`;
-    }).join("");
+function prepararFuncaoParaExibicao(membro) {
+    if (membro.representacao !== undefined) {
+        if (membro.representacao === "Discentes") return "Rep. Discente";
+        if (membro.representacao === "Técnicos") return "Rep. Técnico";
+        if (membro.representacao === "Prof. Dr." || membro.representacao === "Profa. Dra.") return membro.representacao;
+    }
+    
+    // Fallback para caso representação ainda não esteja setada ou seja vazia, mas a função contenha algo útil
+    const fLow = safeLower(membro.funcao || "");
+    if (fLow.includes("discente")) return "Rep. Discente";
+    if (fLow.includes("técnico") || fLow.includes("tecnico")) return "Rep. Técnico";
+    if (fLow.includes("profa") || fLow.includes("prof.a") || fLow.includes("professora") || fLow.includes("diretora")) return "Profa. Dra.";
+    if (fLow.includes("prof") || fLow.includes("docente") || fLow.includes("diretor")) return "Prof. Dr.";
+    
+    return membro.funcao || "—";
 }
 
 function processarAbaixoFuncaoERepresentacao(membro) {
@@ -1517,12 +1523,7 @@ function renderTabelaMembros() {
         tr.innerHTML = `
       <td>
         <div class="name">${escapeHtml(membro.nome)}</div>
-        ${isExtra ? '<div class="role"><span style="color:var(--brand);font-weight:700">[Participante Extra]</span></div>' : ""}
-      </td>
-      <td>
-          <select class="member-funcao" aria-label="Função do participante">
-               ${gerarOpcoesRepresentacao(membro.representacao)}
-          </select>
+        <div class="role">${escapeHtml(prepararFuncaoParaExibicao(membro))} ${isExtra ? '<span style="color:var(--brand);font-weight:700">[Extra]</span>' : ""}</div>
       </td>
       <td>
            <select class="member-identificador" aria-label="Identificador do participante">
@@ -1555,15 +1556,8 @@ function renderTabelaMembros() {
         const radios = tr.querySelectorAll(`input[name="${idUnico}"]`);
         const motivoSelect = tr.querySelector(".motivo");
         const identificadorSelect = tr.querySelector(".member-identificador");
-        const funcaoSelect = tr.querySelector(".member-funcao");
         const btnExcluir = tr.querySelector(".btnExcluirMembro");
         const btnEditar = tr.querySelector(".btnEditarMembro");
-
-        funcaoSelect.addEventListener("change", (e) => {
-             membro.representacao = e.target.value;
-             sincronizarAtaSePossivel();
-             salvarEstado();
-        });
 
         identificadorSelect.addEventListener("change", (event) => {
             const novoValor = esc(event.target.value);
