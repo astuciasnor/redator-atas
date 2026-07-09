@@ -289,8 +289,18 @@ function on(id, eventName, handler) {
 
 function setupGlobalListeners() {
     on("btnNovaReuniao", "click", () => {
-        if (confirm("Tem certeza que deseja apagar todos os dados e iniciar uma nova reunião? Essa ação não pode ser desfeita.")) {
+        if (confirm("Tem certeza que deseja apagar todos os dados e iniciar uma nova reunião? Essa ação não pode ser desfeita e todos os formulários serão zerados.")) {
             localStorage.removeItem(STORAGE_KEY);
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, "0");
+            const suggestNumber = `__/${year}`;
+            
+            // set up dummy data with default data/year
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                meta: { numero: suggestNumber, data: now.toISOString().slice(0,10) }
+            }));
+            
             location.reload();
         }
     });
@@ -832,10 +842,27 @@ function renderConducaoSugestoes() {
         .map(buildConducaoNomeFormatado)
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
-    const options = presentes.map((nome) => `<option value="${escapeHtml(nome)}"></option>`).join("");
-    ["presidenteSugestoes", "redatorSugestoes"].forEach((id) => {
-        const datalist = byId(id);
-        if (datalist) datalist.innerHTML = options;
+    const options = presentes.map((nome) => `<option value="${escapeHtml(nome)}">${escapeHtml(nome)}</option>`).join("");
+    ["presidente", "redigidaPor"].forEach((id) => {
+        const select = byId(id);
+        const selectedValue = select?.value;
+        if (select) {
+            let htmlOptions = '<option value="Prof. Dr. Carlos Alberto Martins Cordeiro">Prof. Dr. Carlos Alberto Martins Cordeiro</option>';
+            htmlOptions += '<option value="Prof. Dr. Evaldo Martins da Silva">Prof. Dr. Evaldo Martins da Silva</option>';
+            htmlOptions += '<option value="Profa. Dra. Simoni Santos">Profa. Dra. Simoni Santos</option>';
+            htmlOptions += '<option value="Outro">Outro...</option>';
+            // Adicionar opções dinâmicas dos presentes, se ainda não estiverem na lista padrão
+            const padroes = ["Prof. Dr. Carlos Alberto Martins Cordeiro", "Prof. Dr. Evaldo Martins da Silva", "Profa. Dra. Simoni Santos", "Outro"];
+            presentes.forEach((nome) => {
+                if (!padroes.includes(nome)) {
+                    htmlOptions += `<option value="${escapeHtml(nome)}">${escapeHtml(nome)}</option>`;
+                }
+            });
+            select.innerHTML = htmlOptions;
+            if (selectedValue) {
+                select.value = selectedValue;
+            }
+        }
     });
 }
 
@@ -2481,7 +2508,7 @@ function collectAttendance() {
 
     todos.forEach((membro) => {
         const nomeFmt = membro.funcao && membro.funcao !== "—"
-            ? `${membro.nome} (${membro.funcao})`
+            ? `${membro.funcao} ${membro.nome}` // MODIFIED: titulo before name
             : membro.nome;
         if (membro.status === "presente") presentes.push(nomeFmt);
         if (membro.status === "ausente") {
@@ -3379,6 +3406,8 @@ function restaurarEstado() {
     const rawState = localStorage.getItem(STORAGE_KEY);
     if (!rawState) {
         setHoje();
+        const now = new Date();
+        byId("numeroAta").value = `__/${now.getFullYear()}`;
         setPautasPadrao();
         setInformesPadrao();
         restoreSectionBases();
@@ -3393,7 +3422,7 @@ function restaurarEstado() {
             byId("tipoReuniao").value = (!tipoRestaurado || tipoRestaurado === "reunião ordinária do colegiado")
                 ? DEFAULT_TIPO_REUNIAO
                 : state.meta.tipo;
-            byId("numeroAta").value = state.meta.numero || "01/2026";
+            byId("numeroAta").value = state.meta.numero || `__/${new Date().getFullYear()}`;
             const tituloRestaurado = esc(state.meta.titulo);
             byId("tituloReuniao").value = (!tituloRestaurado || safeLower(tituloRestaurado) === "reunião fepesca")
                 ? DEFAULT_COLEGIADO

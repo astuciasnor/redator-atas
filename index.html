@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#f8fafc" />
     <meta name="color-scheme" content="light dark" />
     <title>FEPESCA — Redator de Atas</title>
-    <link rel="icon" type="image/png" href="img/logo_fepesca_final.png">
+    <link rel="icon" type="image/png" href="img/logo_redador.png">
     <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -18,7 +18,7 @@
         <header class="top">
             <div class="brand">
                 <div class="logo brand-logo" aria-hidden="true">
-                    <img src="img/logo_fepesca_final.png" alt="">
+                    <img src="img/logo_redador.png" alt="">
                 </div>
                 <div>
                     <h1>FEPESCA — Redator de Atas</h1>
@@ -27,17 +27,17 @@
             </div>
             <div class="chips">
                 <span class="chip chip-action" id="btnExportarSessao" title="Baixar backup da reunião atual">
-                    💾 Salvar Sessão
+                    💾 Exportar Sessão (json)
                 </span>
                 <label class="chip chip-secondary" for="btnImportarSessao" title="Abrir arquivo de reunião">
-                    📂 Abrir Sessão
+                    📂 Importar Sessão (json)
                 </label>
                 <input type="file" id="btnImportarSessao" accept=".json" style="display:none;">
                 <span class="chip chip-brand" id="btnToggleTema" title="Alternar tema da aplicação">
                     🌙 Tema Escuro
                 </span>
-                <span class="chip chip-danger" id="btnNovaReuniao" title="Apagar todas as anotações">
-                    🗑️ Nova Reunião
+                <span class="chip chip-danger" id="btnNovaReuniao" title="Apagar TODOS os dados e anotações e iniciar uma nova reunião">
+                    🗑️ Nova Reunião (Limpar)
                 </span>
                 <span class="chip" id="chipData">📅 Data: —</span>
             </div>
@@ -124,15 +124,21 @@
                                     <div class="form-grid">
                                         <div class="field">
                                             <label for="presidente">Presidente</label>
-                                            <input id="presidente" class="guardar" type="text" list="presidenteSugestoes"
-                                                autocomplete="off" value="Prof. Dr. Carlos Alberto Martins Cordeiro" />
-                                            <datalist id="presidenteSugestoes"></datalist>
+                                            <select id="presidente" class="guardar">
+                                                <option value="Prof. Dr. Carlos Alberto Martins Cordeiro" selected>Prof. Dr. Carlos Alberto Martins Cordeiro</option>
+                                                <option value="Prof. Dr. Evaldo Martins da Silva">Prof. Dr. Evaldo Martins da Silva</option>
+                                                <option value="Profa. Dra. Simoni Santos">Profa. Dra. Simoni Santos</option>
+                                                <option value="Outro">Outro...</option>
+                                            </select>
                                         </div>
                                         <div class="field">
                                             <label for="redigidaPor">Redigida por</label>
-                                            <input id="redigidaPor" class="guardar" type="text" list="redatorSugestoes"
-                                                autocomplete="off" value="Prof. Dr. Evaldo Martins da Silva" />
-                                            <datalist id="redatorSugestoes"></datalist>
+                                            <select id="redigidaPor" class="guardar">
+                                                <option value="Prof. Dr. Carlos Alberto Martins Cordeiro">Prof. Dr. Carlos Alberto Martins Cordeiro</option>
+                                                <option value="Prof. Dr. Evaldo Martins da Silva" selected>Prof. Dr. Evaldo Martins da Silva</option>
+                                                <option value="Profa. Dra. Simoni Santos">Profa. Dra. Simoni Santos</option>
+                                                <option value="Outro">Outro...</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
