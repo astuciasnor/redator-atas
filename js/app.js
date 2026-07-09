@@ -1517,7 +1517,12 @@ function renderTabelaMembros() {
         tr.innerHTML = `
       <td>
         <div class="name">${escapeHtml(membro.nome)}</div>
-        <div class="role">${escapeHtml(membro.funcao || "—")} ${isExtra ? '<span style="color:var(--brand);font-weight:700">[Extra]</span>' : ""}</div>
+        ${isExtra ? '<div class="role"><span style="color:var(--brand);font-weight:700">[Participante Extra]</span></div>' : ""}
+      </td>
+      <td>
+          <select class="member-funcao" aria-label="Função do participante">
+               ${gerarOpcoesRepresentacao(membro.representacao)}
+          </select>
       </td>
       <td>
            <select class="member-identificador" aria-label="Identificador do participante">
@@ -1550,8 +1555,15 @@ function renderTabelaMembros() {
         const radios = tr.querySelectorAll(`input[name="${idUnico}"]`);
         const motivoSelect = tr.querySelector(".motivo");
         const identificadorSelect = tr.querySelector(".member-identificador");
+        const funcaoSelect = tr.querySelector(".member-funcao");
         const btnExcluir = tr.querySelector(".btnExcluirMembro");
         const btnEditar = tr.querySelector(".btnEditarMembro");
+
+        funcaoSelect.addEventListener("change", (e) => {
+             membro.representacao = e.target.value;
+             sincronizarAtaSePossivel();
+             salvarEstado();
+        });
 
         identificadorSelect.addEventListener("change", (event) => {
             const novoValor = esc(event.target.value);

@@ -1813,7 +1813,7 @@ tbody tr:last-child td {
   line-height: 1.55;
 }
 
-.member-identificador, .member-representacao {
+.member-identificador, .member-representacao, .member-funcao {
   width: 100%;
   padding: 6px 10px;
   border: 1px solid var(--border);
@@ -1825,7 +1825,7 @@ tbody tr:last-child td {
   min-height: 32px;
 }
 
-.member-identificador:focus, .member-representacao:focus {
+.member-identificador:focus, .member-representacao:focus, .member-funcao:focus {
   outline: none;
   border-color: var(--brand);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent);
