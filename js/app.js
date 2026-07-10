@@ -2667,7 +2667,7 @@ function finalizarFrase(texto) {
 function gerarTituloFormalAta() {
     const tipo = getTipoReuniaoAta();
     const colegiado = getColegiadoAta();
-    return `Ata da ${tipo} do ${colegiado}, do Instituto de Estudos Costeiros, realizada no dia ${formatDateLonga(byId("dataReuniao")?.value)}.`;
+    return `Ata da ${tipo} do ${colegiado} da Faculdade de Engenharia de Pesca, realizada no dia ${formatDateLonga(byId("dataReuniao")?.value)}.`;
 }
 
 function gerarTextoAta() {
@@ -2693,7 +2693,7 @@ function gerarAtaInstitucional(isResumida) {
     const presencasTexto = presentes.length ? presentes.join(", ") : "sem registro de presença";
 
     paragraphs.push(
-        `Aos ${dia} dias do mês de ${mesExtenso} de ${ano}, às ${horaInicio}, no(a) ${local}, realizou-se a ${tipo} do ${colegiado}, do Instituto de Estudos Costeiros, sob a presidência de ${presidente}. Estiveram presentes ${presencasTexto}.`
+        `Aos ${numeroPorExtenso(dia)} dias do mês de ${mesExtenso} do ano de ${anoPorExtenso(ano)}, às ${horaInicio}, no(a) ${local}, realizou-se a ${tipo} do ${colegiado} da Faculdade de Engenharia de Pesca (FEPESCA), sob a presidência de ${presidente}. Estiveram presentes ${presencasTexto}.`
     );
 
     if (ausJust.length || ausSem.length) {
@@ -3534,6 +3534,33 @@ function restaurarEstado() {
         restoreSectionBases();
         document.body.setAttribute("data-theme", DEFAULT_THEME);
     }
+}
+
+function numeroPorExtenso(num) {
+    const unidades = ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez", "onze", "doze", "treze", "catorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"];
+    const dezenas = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
+    const n = parseInt(num, 10);
+    if (isNaN(n)) return num;
+    if (n < 20) return unidades[n];
+    if (n < 100) return dezenas[Math.floor(n / 10)] + (n % 10 !== 0 ? ` e ${unidades[n % 10]}` : "");
+    if (n === 100) return "cem";
+    if (n > 100 && n < 1000) {
+        const centenas = ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos"];
+        const centena = centenas[Math.floor(n / 100)];
+        const resto = n % 100;
+        return centena + (resto !== 0 ? ` e ${numeroPorExtenso(resto)}` : "");
+    }
+    return num; // fallback para não poluir muito se passar de mil (não usado para dia normalmente)
+}
+
+function anoPorExtenso(numStr) {
+    const n = parseInt(numStr, 10);
+    if (isNaN(n)) return numStr;
+    if (n >= 2000 && n < 3000) {
+        const resto = n - 2000;
+        return `dois mil` + (resto > 0 ? ` e ${numeroPorExtenso(resto)}` : "");
+    }
+    return numStr;
 }
 
 function setHoje() {
