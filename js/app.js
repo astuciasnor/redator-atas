@@ -1546,9 +1546,11 @@ function renderTabelaMembros() {
              ${membro.motivo && !MOTIVOS_AUSENCIA.includes(membro.motivo) ? `<option value="${escapeHtml(membro.motivo)}" selected>${escapeHtml(membro.motivo)}</option>` : ''}
         </select>
       </td>
-      <td style="text-align:center; display:flex; gap:6px; justify-content:center;">
-        <button class="btn edit small btnEditarMembro" title="Editar participante">✏️</button>
-        <button class="btn danger small btnExcluirMembro" title="Remover participante">X</button>
+      <td style="text-align:center;">
+          <div style="display:flex; gap:6px; justify-content:center; align-items:center; height:100%;">
+            <button class="btn edit small btnEditarMembro" title="Editar participante">✏️</button>
+            <button class="btn danger small btnExcluirMembro" title="Remover participante">X</button>
+          </div>
       </td>
     `;
         tbody.appendChild(tr);
