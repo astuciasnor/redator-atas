@@ -431,6 +431,12 @@ function setupGlobalListeners() {
         on(id, "change", salvarEstado);
     });
 
+    // A assinatura do e-mail acompanha o nome do presidente da reunião.
+    on("presidente", "input", (event) => {
+        const assinatura = byId("emailAssinatura");
+        if (assinatura) assinatura.value = esc(event.target.value);
+    });
+
     on("transcricaoAudio", "input", () => syncTranscriptDerivedState());
     on("transcricaoFalanteAtual", "input", (event) => {
         selectedSpeechParticipant = esc(event.target.value);
@@ -2963,7 +2969,8 @@ function gerarTextoEmail() {
     const local = esc(byId("localReuniao")?.value) || "local não informado";
     const hora = esc(byId("horaInicio")?.value) || "--:--";
     const linkStr = esc(byId("emailLink")?.value);
-    const nomeAss = esc(byId("emailAssinatura")?.value) || "—";
+    const presidenteReuniao = esc(byId("presidente")?.value);
+    const nomeAss = esc(byId("emailAssinatura")?.value) || presidenteReuniao || "—";
     const cargoAss = esc(byId("emailCargo")?.value) || "—";
     const dataTexto = formatDateLonga(byId("dataReuniao")?.value);
     const trechoLink = linkStr ? ` e por meio do link: ${linkStr}.` : ".";
