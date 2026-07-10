@@ -295,13 +295,25 @@ function setupGlobalListeners() {
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, "0");
             const suggestNumber = `${month}/${year}`;
-            
-            // Cria os dados básicos com a data atual e o número sugerido da ata para o reload.
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                meta: { numero: suggestNumber, data: now.toISOString().slice(0,10) },
-                tema: document.body.getAttribute("data-theme") || DEFAULT_THEME
+
+            // Zera as marcações de presença/ausência mantendo o cadastro base de participantes.
+            const membrosLimpos = [...membrosOriginais].map((membro) => ({
+                ...membro,
+                status: "",
+                motivo: "",
             }));
-            
+
+            // Cria os dados básicos com a data atual e o número sugerido da ata para o reload.
+            // Grava pautas e informes vazios explicitamente para não repopular com os padrões.
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                meta: { numero: suggestNumber, data: now.toISOString().slice(0, 10) },
+                tema: document.body.getAttribute("data-theme") || DEFAULT_THEME,
+                pautas: [],
+                informes: [],
+                membrosOriginais: membrosLimpos,
+                membrosExtras: [],
+            }));
+
             location.reload();
         }
     });
