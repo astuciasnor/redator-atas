@@ -1023,15 +1023,18 @@ function selecionarFalanteRapido(nome) {
 
     if (speechRecognitionActive) {
         if (esc(speechRecognitionInterimText)) {
-            // Há fala em andamento ainda sendo reconhecida: enfileira a troca
-            // para não misturar os resíduos da fala atual no novo falante.
+            // Há fala em andamento ainda sendo reconhecida: enfileira a troca.
+            // Ela será aplicada pelo onresult assim que o motor finalizar a
+            // frase atual, garantindo que a fala em curso permaneça atribuída
+            // ao falante anterior. O timer abaixo é apenas um fallback para o
+            // caso de a fala provisória se dissipar sem gerar resultado final.
             pendingSpeakerSwitch = { identificador, nome: nomeFinal };
             if (pendingSpeakerTimer) clearTimeout(pendingSpeakerTimer);
             pendingSpeakerTimer = setTimeout(() => {
                 pendingSpeakerTimer = null;
-                if (pendingSpeakerSwitch && speechRecognitionActive) {
+                if (pendingSpeakerSwitch && speechRecognitionActive && !esc(speechRecognitionInterimText)) {
                     aplicarTrocaFalantePendente();
-                    applySpeechTranscriptToField(speechRecognitionInterimText, { persist: true });
+                    applySpeechTranscriptToField("", { persist: true });
                 }
             }, 1200);
         } else {
