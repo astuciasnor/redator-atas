@@ -1036,7 +1036,7 @@ function selecionarFalanteRapido(nome) {
                     aplicarTrocaFalantePendente();
                     applySpeechTranscriptToField("", { persist: true });
                 }
-            }, 100);
+            }, 0);
         } else {
             cancelarTrocaFalantePendente();
             trocarFalanteAtivo(identificador);
